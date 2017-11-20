@@ -16,6 +16,7 @@
 // OpenIGTLinkIO includes
 #include <igtlioLogic.h>
 #include <igtlioConnector.h>
+#include <igtlioSession.h>
 
 class QComboBox;
 class QPlusDeviceSetSelectorWidget;
@@ -88,6 +89,8 @@ protected:
   /*! Parse a given log line for salient information from the PlusServer */
   void ParseContent(const std::string& message);
 
+  PlusStatus StartServerFromString(const std::string& configFileString);
+
 protected:
   /*! Device set selector widget */
   QPlusDeviceSetSelectorWidget*         m_DeviceSetSelectorWidget;
@@ -102,7 +105,14 @@ protected:
   int m_RemoteControlServerPort;
   vtkSmartPointer<vtkCallbackCommand>   m_RemoteControlServerCallbackCommand;
   igtlio::LogicPointer                  m_RemoteControlServerLogic;
+  igtlio::SessionPointer       m_RemoteControlServerSession;
   igtlio::ConnectorPointer              m_RemoteControlServerConnector;
+  igtlio::DevicePointer          m_RemoteControlServerDevice;
+  vtkSmartPointer<vtkMultiThreader>     m_Threader;
+  std::pair<bool, bool> m_RemoteControlActive;
+
+  PlusStatus StartRemoteControlServer();
+  static void* PlusServerLauncherMainWindow::PlusRemoteThread(vtkMultiThreader::ThreadInfo* data);
 
 private:
   Ui::PlusServerLauncherMainWindow ui;
