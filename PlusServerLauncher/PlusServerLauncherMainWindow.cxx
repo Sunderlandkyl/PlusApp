@@ -6,6 +6,7 @@ See License.txt for details.
 
 // Local includes
 #include "PlusServerLauncherMainWindow.h"
+#include "vtkPlusServerLauncherRemoteControl.h"
 
 // PlusLib includes
 #include <PlusCommon.h>
@@ -28,6 +29,9 @@ See License.txt for details.
 #include <QRegExp>
 #include <QStringList>
 #include <QTimer>
+
+// VTK include
+#include <vtkMultiThreader.h>
 
 // STL includes
 #include <algorithm>
@@ -55,9 +59,6 @@ PlusServerLauncherMainWindow::PlusServerLauncherMainWindow(QWidget* parent /*=0*
   , m_CurrentServerInstance(NULL)
   , m_RemoteControlServerPort(remoteControlServerPort)
 {
-  m_RemoteControlServerCallbackCommand = vtkSmartPointer<vtkCallbackCommand>::New();
-  m_RemoteControlServerCallbackCommand->SetCallback(PlusServerLauncherMainWindow::OnRemoteControlServerEventReceived);
-  m_RemoteControlServerCallbackCommand->SetClientData(this);
 
   // Set up UI
   ui.setupUi(this);
@@ -115,7 +116,7 @@ PlusServerLauncherMainWindow::PlusServerLauncherMainWindow(QWidget* parent /*=0*
     }
     else
     {
-      ConnectToDevicesByConfigFile(configFileName);
+      this->ConnectToDevicesByConfigFile(configFileName);
       if (m_DeviceSetSelectorWidget->GetConnectionSuccessful())
       {
         showMinimized();
@@ -153,25 +154,22 @@ PlusServerLauncherMainWindow::PlusServerLauncherMainWindow(QWidget* parent /*=0*
       m_RemoteControlServerPort = DEFAULT_REMOTE_CONTROL_SERVER_PORT;
     }
 
-    LOG_INFO("Start remote control server at port: " << m_RemoteControlServerPort);
-    m_RemoteControlServerLogic = igtlio::LogicPointer::New();
-    m_RemoteControlServerLogic->AddObserver(igtlio::Logic::CommandReceivedEvent, m_RemoteControlServerCallbackCommand);
-    m_RemoteControlServerLogic->AddObserver(igtlio::Logic::CommandResponseReceivedEvent, m_RemoteControlServerCallbackCommand);
-    m_RemoteControlServerConnector = m_RemoteControlServerLogic->CreateConnector();
-    m_RemoteControlServerConnector->SetTypeServer(m_RemoteControlServerPort);
-    m_RemoteControlServerConnector->Start();
+    m_LauncherRemoteControl = vtkSmartPointer<vtkPlusServerLauncherRemoteControl>::New();
+    m_LauncherRemoteControl->SetServerPort(m_RemoteControlServerPort);
+    m_LauncherRemoteControl->SetMainWindow(this);
+    m_LauncherRemoteControl->SetDeviceSetSelectorWidget(m_DeviceSetSelectorWidget);
+    if (!m_LauncherRemoteControl || !m_LauncherRemoteControl->StartRemoteControlServer())
+    {
+      LOG_ERROR("Remote control server could not be started!")
+    }
   }
+
 }
 
 //-----------------------------------------------------------------------------
 PlusServerLauncherMainWindow::~PlusServerLauncherMainWindow()
 {
   StopServer(); // deletes m_CurrentServerInstance
-
-  if (m_RemoteControlServerLogic)
-  {
-    m_RemoteControlServerLogic->RemoveObserver(m_RemoteControlServerCallbackCommand);
-  }
 
   if (m_DeviceSetSelectorWidget != NULL)
   {
@@ -212,6 +210,12 @@ bool PlusServerLauncherMainWindow::StartServer(const QString& configFilePath)
   {
     LOG_INFO("Server process started successfully");
     ui.comboBox_LogLevel->setEnabled(false);
+
+    if (m_LauncherRemoteControl)
+    {
+      std::string configFile = configFilePath.toStdString();
+      m_LauncherRemoteControl->SendServerStartupSignal(configFile.c_str());
+    }
     return true;
   }
   else
@@ -261,6 +265,12 @@ bool PlusServerLauncherMainWindow::StopServer()
     }
     LOG_INFO("Server process stopped successfully");
     ui.comboBox_LogLevel->setEnabled(true);
+
+    // If the remote controller is still running, send a command to all connected controllers to let them know that the server has been stopped manually.
+    if (m_LauncherRemoteControl)
+    {
+      m_LauncherRemoteControl->SendServerShutdownSignal();
+    }
   }
   delete m_CurrentServerInstance;
   m_CurrentServerInstance = NULL;
@@ -287,7 +297,7 @@ void PlusServerLauncherMainWindow::ParseContent(const std::string& message)
   else if (message.find("Server status: ") != std::string::npos)
   {
     // pull off server status and display it
-    this->m_DeviceSetSelectorWidget->SetDescriptionSuffix(QString(message.c_str()));
+    m_DeviceSetSelectorWidget->SetDescriptionSuffix(QString(message.c_str()));
   }
 }
 
@@ -324,6 +334,26 @@ void PlusServerLauncherMainWindow::ConnectToDevicesByConfigFile(std::string aCon
     m_DeviceSetSelectorWidget->SetConnectionSuccessful(false);
     m_DeviceSetSelectorWidget->SetConnectButtonText(QString("Launch server"));
   }
+}
+
+//---------------------------------------------------------------------------
+void PlusServerLauncherMainWindow::ConnectToDevicesByConfigString(std::string aConfigFileString, std::string aFilename)
+{
+  if (STRCASECMP("", aFilename.c_str()) == 0)
+  {
+    PlusCommon::CreateTemporaryFilename(aFilename, vtkPlusConfig::GetInstance()->GetOutputDirectory());
+    LOG_INFO("Creating temporary file: " << aFilename);
+  }
+
+  // Write contents of server config elements to file
+  ofstream file;
+  file.open(aFilename);
+  file << aConfigFileString;
+  file.close();
+
+  // TODO: update UI to show the name of the config file that was passed via string
+  this->ConnectToDevicesByConfigFile(aFilename);
+
 }
 
 //-----------------------------------------------------------------------------
@@ -483,6 +513,11 @@ void PlusServerLauncherMainWindow::ServerExecutableFinished(int returnCode, QPro
   this->ConnectToDevicesByConfigFile("");
   ui.comboBox_LogLevel->setEnabled(true);
   m_DeviceSetSelectorWidget->SetConnectionSuccessful(false);
+
+  if (m_LauncherRemoteControl)
+  {
+    m_LauncherRemoteControl->SendServerShutdownSignal();
+  }
 }
 
 //----------------------------------------------------------------------------
@@ -491,23 +526,39 @@ void PlusServerLauncherMainWindow::LogLevelChanged()
   vtkPlusLogger::Instance()->SetLogLevel(ui.comboBox_LogLevel->currentData().toInt());
 }
 
-//---------------------------------------------------------------------------
-void PlusServerLauncherMainWindow::OnRemoteControlServerEventReceived(vtkObject* caller, unsigned long eventId, void* clientData, void* callData)
+void PlusServerLauncherMainWindow::SetLogLevel(int logLevel)
 {
-  PlusServerLauncherMainWindow* self = reinterpret_cast<PlusServerLauncherMainWindow*>(clientData);
+  this->ui.comboBox_LogLevel->setCurrentIndex(this->ui.comboBox_LogLevel->findData(QVariant(logLevel)));
+}
 
-  auto device = dynamic_cast<igtlio::Device*>(caller);
+int PlusServerLauncherMainWindow::GetLogLevel()
+{
+  return this->ui.comboBox_LogLevel->currentData().Int;
+}
 
-  if (device == nullptr)
+//----------------------------------------------------------------------------
+int PlusServerLauncherMainWindow::GetServerStatus()
+{
+  if (m_CurrentServerInstance)
   {
-    return;
+    return m_CurrentServerInstance->state();
   }
-
-  switch (eventId)
+  else
   {
-    case igtlio::Logic::CommandReceivedEvent:
-      break;
-    case igtlio::Logic::CommandResponseReceivedEvent:
-      break;
+    return false;
+  }
+}
+
+//----------------------------------------------------------------------------
+int PlusServerLauncherMainWindow::GetServerError()
+{
+  
+  if (m_CurrentServerInstance)
+  {
+    return m_CurrentServerInstance->error();
+  }
+  else
+  {
+    return -1;
   }
 }

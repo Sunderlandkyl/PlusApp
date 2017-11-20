@@ -16,6 +16,7 @@
 // OpenIGTLinkIO includes
 #include <igtlioLogic.h>
 #include <igtlioConnector.h>
+#include <igtlioSession.h>
 
 class QComboBox;
 class QPlusDeviceSetSelectorWidget;
@@ -24,6 +25,7 @@ class QWidget;
 class vtkPlusDataCollector;
 class vtkPlusOpenIGTLinkServer;
 class vtkPlusTransformRepository;
+class vtkPlusServerLauncherRemoteControl;
 
 //-----------------------------------------------------------------------------
 
@@ -53,12 +55,23 @@ public:
   PlusServerLauncherMainWindow(QWidget* parent = 0, Qt::WindowFlags flags = 0, bool autoConnect = false, int remoteControlServerPort = RemoteControlServerPortUseDefault);
   ~PlusServerLauncherMainWindow();
 
-protected slots:
+public slots:
   /*!
-    Connect to devices described in the argument configuration file in response by clicking on the Connect button
-    \param aConfigFile DeviceSet configuration file path and name
+  Connect to devices described in the argument configuration file in response by clicking on the Connect button
+  \param aConfigFile DeviceSet configuration file path and name
   */
   void ConnectToDevicesByConfigFile(std::string);
+
+  /*! Connect to devices described in the configuration contained within the string */
+  void ConnectToDevicesByConfigString(std::string configFileString, std::string filename = "");
+
+  void SetLogLevel(int logLevel);
+  int GetLogLevel();
+
+  int GetServerStatus();
+  int GetServerError();
+
+protected slots:
 
   /*! Called whenever a key is pressed while the windows is active, used for intercepting the ESC key */
   virtual void keyPressEvent(QKeyEvent* e);
@@ -73,7 +86,8 @@ protected slots:
 
   void LogLevelChanged();
 
-  static void OnRemoteControlServerEventReceived(vtkObject* caller, unsigned long eventId, void* clientdata, void* calldata);
+  /*! Stop server process, disconnect outputs. Returns with true on success (shutdown on request was successful, without forcing). */
+  bool StopServer();
 
 protected:
   /*! Receive standard output or error and send it to the log */
@@ -81,9 +95,6 @@ protected:
 
   /*! Start server process, connect outputs to logger. Returns with true on success. */
   bool StartServer(const QString& configFilePath);
-
-  /*! Stop server process, disconnect outputs. Returns with true on success (shutdown on request was successful, without forcing). */
-  bool StopServer();
 
   /*! Parse a given log line for salient information from the PlusServer */
   void ParseContent(const std::string& message);
@@ -98,11 +109,8 @@ protected:
   /*! List of active ports for PlusServers */
   std::string                           m_Suffix;
 
-  /*! OpenIGTLink server that allows remote control of launcher (start/stop a PlusServer process, etc) */
   int m_RemoteControlServerPort;
-  vtkSmartPointer<vtkCallbackCommand>   m_RemoteControlServerCallbackCommand;
-  igtlio::LogicPointer                  m_RemoteControlServerLogic;
-  igtlio::ConnectorPointer              m_RemoteControlServerConnector;
+  vtkSmartPointer<vtkPlusServerLauncherRemoteControl>  m_LauncherRemoteControl;
 
 private:
   Ui::PlusServerLauncherMainWindow ui;
