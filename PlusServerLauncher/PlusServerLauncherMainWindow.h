@@ -75,6 +75,7 @@ protected slots:
   void LogLevelChanged();
 
   static void OnRemoteControlServerEventReceived(vtkObject* caller, unsigned long eventId, void* clientdata, void* calldata);
+  static void OnCommandRecieved(PlusServerLauncherMainWindow* self, igtlio::CommandDevicePointer command);
 
 protected:
   /*! Receive standard output or error and send it to the log */
@@ -89,7 +90,8 @@ protected:
   /*! Parse a given log line for salient information from the PlusServer */
   void ParseContent(const std::string& message);
 
-  PlusStatus StartServerFromString(const std::string& configFileString);
+  /*! Connect to devices described in the configuration contained within the string*/
+  PlusStatus ConnectToDevicesByConfigString(const std::string& configFileString);
 
 protected:
   /*! Device set selector widget */
@@ -105,9 +107,8 @@ protected:
   int m_RemoteControlServerPort;
   vtkSmartPointer<vtkCallbackCommand>   m_RemoteControlServerCallbackCommand;
   igtlio::LogicPointer                  m_RemoteControlServerLogic;
-  igtlio::SessionPointer       m_RemoteControlServerSession;
   igtlio::ConnectorPointer              m_RemoteControlServerConnector;
-  igtlio::DevicePointer          m_RemoteControlServerDevice;
+  igtlio::SessionPointer                m_RemoteControlServerSession;
   vtkSmartPointer<vtkMultiThreader>     m_Threader;
   std::pair<bool, bool> m_RemoteControlActive;
 

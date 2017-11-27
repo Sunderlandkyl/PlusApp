@@ -51,6 +51,7 @@ namespace
   }
 }
 
+void TEST_START_CLIENT();
 //-----------------------------------------------------------------------------
 PlusServerLauncherMainWindow::PlusServerLauncherMainWindow(QWidget* parent /*=0*/, Qt::WindowFlags flags/*=0*/, bool autoConnect /*=false*/, int remoteControlServerPort/*=RemoteControlServerPortUseDefault*/)
   : QMainWindow(parent, flags | Qt::WindowMinimizeButtonHint | Qt::WindowCloseButtonHint)
@@ -147,20 +148,22 @@ PlusServerLauncherMainWindow::PlusServerLauncherMainWindow(QWidget* parent /*=0*
     }
   }
 
-  this->StartServerFromString("<PlusConfiguration version=\"2.0\">  <DataCollection StartupDelaySec=\"1.0\" >    <DeviceSet       Name=\"PlusServer: Media Foundation video capture device - color\"      Description=\"Broadcasting acquired video through OpenIGTLink\" />    <Device      Id=\"VideoDevice\"       Type=\"MmfVideo\"       FrameSize=\"640 480\"      VideoFormat=\"YUY2\"      CaptureDeviceId=\"0\" >      <DataSources>        <DataSource Type=\"Video\" Id=\"Video\" PortUsImageOrientation=\"MF\" ImageType=\"RGB_COLOR\"  />      </DataSources>            <OutputChannels>        <OutputChannel Id=\"VideoStream\" VideoDataSourceId=\"Video\" />      </OutputChannels>    </Device>    <Device      Id=\"CaptureDevice\"      Type=\"VirtualCapture\"      BaseFilename=\"RecordingTest.mha\"      EnableCapturingOnStart=\"FALSE\" >      <InputChannels>        <InputChannel Id=\"VideoStream\" />      </InputChannels>    </Device>  </DataCollection>  <CoordinateDefinitions>    <Transform From=\"Image\" To=\"Reference\"      Matrix=\"        0.2 0.0 0.0 0.0        0.0 0.2 0.0 0.0        0.0 0.0 0.2 0.0                0 0 0 1\" />  </CoordinateDefinitions>    <PlusOpenIGTLinkServer     MaxNumberOfIgtlMessagesToSend=\"1\"     MaxTimeSpentWithProcessingMs=\"50\"     ListeningPort=\"18944\"     SendValidTransformsOnly=\"true\"     OutputChannelId=\"VideoStream\" >     <DefaultClientInfo>       <MessageTypes>         <Message Type=\"IMAGE\" />      </MessageTypes>      <ImageNames>        <Image Name=\"Image\" EmbeddedTransformToFrame=\"Reference\" />      </ImageNames>    </DefaultClientInfo>  </PlusOpenIGTLinkServer></PlusConfiguration>");
-  //LOG_INFO("Server IP addresses: " << ipAddresses.toLatin1().constData());
+  LOG_INFO("Server IP addresses: " << ipAddresses.toLatin1().constData());
 
-  //if (m_RemoteControlServerPort != PlusServerLauncherMainWindow::RemoteControlServerPortDisable)
-  //{
-  //  if (m_RemoteControlServerPort == PlusServerLauncherMainWindow::RemoteControlServerPortUseDefault)
-  //  {
-  //    m_RemoteControlServerPort = DEFAULT_REMOTE_CONTROL_SERVER_PORT;
-  //  }
-  //  if (!this->StartRemoteControlServer())
-  //  {
-  //    LOG_ERROR("Remote control server could not be started!")
-  //  }
-  //}
+  if (m_RemoteControlServerPort != PlusServerLauncherMainWindow::RemoteControlServerPortDisable)
+  {
+    if (m_RemoteControlServerPort == PlusServerLauncherMainWindow::RemoteControlServerPortUseDefault)
+    {
+      m_RemoteControlServerPort = DEFAULT_REMOTE_CONTROL_SERVER_PORT;
+    }
+    if (!this->StartRemoteControlServer())
+    {
+      LOG_ERROR("Remote control server could not be started!")
+    }
+  }
+
+
+  TEST_START_CLIENT();
 
 }
 
@@ -504,50 +507,178 @@ void PlusServerLauncherMainWindow::OnRemoteControlServerEventReceived(vtkObject*
 {
   PlusServerLauncherMainWindow* self = reinterpret_cast<PlusServerLauncherMainWindow*>(clientData);
 
-  /*auto device = dynamic_cast<igtlio::Device*>(caller);
+  auto device = dynamic_cast<igtlio::Device*>(caller);
+  auto logic = dynamic_cast<igtlio::Logic*>(caller);
+  auto connector = dynamic_cast<igtlio::Connector*>(caller);
 
-  if (device == nullptr)
-  {
-    return;
-  }*/
+  //if (device == nullptr)
+  //{
+  //  return;
+  //}
+  LOG_WARNING(eventId);
 
   switch (eventId)
   {
     case igtlio::Logic::CommandReceivedEvent:
+      LOG_ERROR("COMMAND RECIEVED");
+      if (device)
+      {
+        LOG_ERROR("device");
+      }
+      else if (logic)
+      {
+        for (unsigned int i = 0; i < logic->GetNumberOfDevices(); ++i)
+        {
+          igtlio::DevicePointer device = logic->GetDevice(i);
+          if (STRCASECMP(device->GetDeviceType().c_str(), "COMMAND") == 0)
+          {
+            igtlio::CommandDevicePointer commandDevice = igtlio::CommandDevice::SafeDownCast(device);
+            if (device->MessageDirectionIsIn())
+            {
+              PlusServerLauncherMainWindow::OnCommandRecieved(self, commandDevice);
+            }
+          }
+        }
+
+      }
+      else if (connector)
+      {
+        LOG_ERROR("connector");
+      }
+      else
+      {
+        LOG_ERROR("NO MATCH");
+      }
       break;
 
     case igtlio::Logic::CommandResponseReceivedEvent:
+      LOG_WARNING("RESPONSE RECIEVED");
+      break;
+
+    case igtlio::Logic::ConnectionAddedEvent:
+      LOG_WARNING("ADDED");
+      break;
+
+    case igtlio::Connector::ConnectedEvent:
+      LOG_WARNING("CONNECTED");
+      break;
+
+    case igtlio::Connector::DisconnectedEvent:
+      LOG_WARNING("DISCONNECTED");
       break;
   }
 }
+
+void PlusServerLauncherMainWindow::OnCommandRecieved(PlusServerLauncherMainWindow* self, igtlio::CommandDevicePointer command)
+{
+
+  LOG_ERROR("INCOMING COMMAND");
+
+  igtlio::CommandConverter::ContentData content = command->GetContent();
+  std::string commandName = content.name;
+
+  if (STRCASECMP(commandName.c_str(), "StartServer") == 0)
+  {
+    
+    if (self->ConnectToDevicesByConfigString(content.content))
+    {
+      igtlio::CommandDevicePointer d = self->m_RemoteControlServerSession->SendCommandResponse(command->GetDeviceName(), commandName, "<Command>\n"
+                                                                                                                                      "  <Result success=true>"
+                                                                                                                                      "</Command>");
+      LOG_ERROR(d->GetContent().id);
+      LOG_ERROR(d->GetContent().name);
+      LOG_ERROR(d->GetContent().content);
+
+    }
+    else
+    {
+      //self->m_RemoteControlServerSession->SendCommandResponse(command->GetDeviceName(), commandName, "Server failed to start.");
+    }
+
+  }
+  else if (STRCASECMP(commandName.c_str(), "StopServer") == 0)
+  {
+    self->StopServer();
+  }
+
+}
+
+void TEST_RESPONSE(vtkObject* caller, unsigned long eventID, void* clientData, void* callData)
+{
+  //LOG_ERROR("EventID: " << eventID);
+  //PlusServerLauncherMainWindow* self = reinterpret_cast<PlusServerLauncherMainWindow*>(clientData);
+
+
+  auto logic = dynamic_cast<igtlio::Logic*>(caller);
+
+  for (unsigned int i = 0; i < logic->GetNumberOfDevices(); ++i)
+  {
+    igtlio::DevicePointer device = logic->GetDevice(i);
+    if (STRCASECMP(device->GetDeviceType().c_str(), "COMMAND") == 0)
+    {
+      igtlio::CommandDevicePointer commandDevice = igtlio::CommandDevice::SafeDownCast(device);
+      if (device->MessageDirectionIsIn())
+      {
+        LOG_WARNING(commandDevice->GetContent().id);
+        LOG_WARNING(commandDevice->GetContent().name);
+        LOG_WARNING(commandDevice->GetContent().content);
+      }
+    }
+  }
+}
+
+void TEST_START_CLIENT()
+{
+
+  vtkSmartPointer<vtkCallbackCommand> c = vtkSmartPointer<vtkCallbackCommand>::New();
+  c->SetCallback(TEST_RESPONSE);
+  c->SetClientData(NULL);
+
+  Sleep(1000);
+
+  igtlio::LogicPointer logic = igtlio::LogicPointer::New();
+  igtlio::ConnectorPointer connector = logic->CreateConnector();
+  connector->SetTypeClient("localhost", 18904);
+  connector->Start();
+
+  logic->AddObserver(igtlio::Logic::CommandResponseReceivedEvent, c);
+  
+  Sleep(50);
+  connector->SendCommand("CMD_1", "StartServer", "<PlusConfiguration version=\"2.0\">  <DataCollection StartupDelaySec=\"1.0\" >    <DeviceSet       Name=\"PlusServer: Media Foundation video capture device - color\"      Description=\"Broadcasting acquired video through OpenIGTLink\" />    <Device      Id=\"VideoDevice\"       Type=\"MmfVideo\"       FrameSize=\"640 480\"      VideoFormat=\"YUY2\"      CaptureDeviceId=\"0\" >      <DataSources>        <DataSource Type=\"Video\" Id=\"Video\" PortUsImageOrientation=\"MF\" ImageType=\"RGB_COLOR\"  />      </DataSources>            <OutputChannels>        <OutputChannel Id=\"VideoStream\" VideoDataSourceId=\"Video\" />      </OutputChannels>    </Device>    <Device      Id=\"CaptureDevice\"      Type=\"VirtualCapture\"      BaseFilename=\"RecordingTest.mha\"      EnableCapturingOnStart=\"FALSE\" >      <InputChannels>        <InputChannel Id=\"VideoStream\" />      </InputChannels>    </Device>  </DataCollection>  <CoordinateDefinitions>    <Transform From=\"Image\" To=\"Reference\"      Matrix=\"        0.2 0.0 0.0 0.0        0.0 0.2 0.0 0.0        0.0 0.0 0.2 0.0                0 0 0 1\" />  </CoordinateDefinitions>    <PlusOpenIGTLinkServer     MaxNumberOfIgtlMessagesToSend=\"1\"     MaxTimeSpentWithProcessingMs=\"50\"     ListeningPort=\"18944\"     SendValidTransformsOnly=\"true\"     OutputChannelId=\"VideoStream\" >     <DefaultClientInfo>       <MessageTypes>         <Message Type=\"IMAGE\" />      </MessageTypes>      <ImageNames>        <Image Name=\"Image\" EmbeddedTransformToFrame=\"Reference\" />      </ImageNames>    </DefaultClientInfo>  </PlusOpenIGTLinkServer></PlusConfiguration>");
+  Sleep(50);
+  
+  for (int i = 0; i < 10; ++i)
+  {
+    logic->PeriodicProcess();
+    //connector->RequestPushOutgoingMessages();
+    vtkPlusAccurateTimer::DelayWithEventProcessing(0.2);
+  }
+
+  connector->Stop();
+  //deviceFactory->Delete();
+}
+
 
 //---------------------------------------------------------------------------
 PlusStatus PlusServerLauncherMainWindow::StartRemoteControlServer()
 {
 
+  igtlio::SessionPointer p = igtlio::SessionPointer::New();
+  
   LOG_INFO("Start remote control server at port: " << m_RemoteControlServerPort);
   m_RemoteControlServerLogic = igtlio::LogicPointer::New();
   m_RemoteControlServerLogic->AddObserver(igtlio::Logic::CommandReceivedEvent, m_RemoteControlServerCallbackCommand);
   m_RemoteControlServerLogic->AddObserver(igtlio::Logic::CommandResponseReceivedEvent, m_RemoteControlServerCallbackCommand);
+  m_RemoteControlServerSession = m_RemoteControlServerLogic->StartServer(m_RemoteControlServerPort);
+  //m_RemoteControlServerConnector->SetTypeServer(m_RemoteControlServerPort);
+  //m_RemoteControlServerConnector->Start();
 
   m_RemoteControlServerConnector = m_RemoteControlServerLogic->CreateConnector();
   m_RemoteControlServerConnector->AddObserver(igtlio::Connector::ConnectedEvent, m_RemoteControlServerCallbackCommand);
   m_RemoteControlServerConnector->AddObserver(igtlio::Connector::DisconnectedEvent, m_RemoteControlServerCallbackCommand);
-  m_RemoteControlServerConnector->SetTypeServer(m_RemoteControlServerPort);
-
-  //m_RemoteControlServerDevice = m_RemoteControlServerConnector->GetDeviceFactory()->create("STRING", "CMD");
-  //m_RemoteControlServerDevice->AddObserver(igtlio::Device::CommandQueryReceivedEvent, m_RemoteControlServerCallbackCommand);
-  //m_RemoteControlServerDevice->AddObserver(igtlio::Device::CommandResponseReceivedEvent, m_RemoteControlServerCallbackCommand);
-  //m_RemoteControlServerDevice->MessageDirectionIsIn();
-  //m_RemoteControlServerConnector->AddDevice(m_RemoteControlServerDevice);
-
-  //std::vector<std::string> deviceTypes = m_RemoteControlServerConnector->GetDeviceFactory()->GetAvailableDeviceTypes();
-  //for (std::vector<std::string>::iterator s = deviceTypes.begin(); s != deviceTypes.end(); ++s)
-  //{
-  //  LOG_WARNING(*s);
-  //}
-
-  m_RemoteControlServerConnector->Start();
+  m_RemoteControlServerConnector->AddObserver(igtlio::Connector::DeviceContentModifiedEvent, m_RemoteControlServerCallbackCommand);
+  m_RemoteControlServerConnector->AddObserver(igtlio::Connector::NewDeviceEvent, m_RemoteControlServerCallbackCommand);
+  m_RemoteControlServerConnector->AddObserver(igtlio::Connector::RemovedDeviceEvent, m_RemoteControlServerCallbackCommand);
 
   // Create thread to receive commands
   m_Threader = vtkSmartPointer<vtkMultiThreader>::New();
@@ -562,7 +693,6 @@ PlusStatus PlusServerLauncherMainWindow::StartRemoteControlServer()
 void* PlusServerLauncherMainWindow::PlusRemoteThread(vtkMultiThreader::ThreadInfo* data)
 {
   PlusServerLauncherMainWindow* self = (PlusServerLauncherMainWindow*)(data->UserData);
-
   LOG_INFO("Remote control started");
 
   self->m_RemoteControlActive.second = true;
@@ -579,7 +709,7 @@ void* PlusServerLauncherMainWindow::PlusRemoteThread(vtkMultiThreader::ThreadInf
 }
 
 //---------------------------------------------------------------------------
-PlusStatus PlusServerLauncherMainWindow::StartServerFromString(const std::string& configFileString)
+PlusStatus PlusServerLauncherMainWindow::ConnectToDevicesByConfigString(const std::string& configFileString)
 {
   std::string filename;
   PlusCommon::CreateTemporaryFilename(filename, vtkPlusConfig::GetInstance()->GetOutputDirectory());
