@@ -61,6 +61,9 @@ protected slots:
   */
   void ConnectToDevicesByConfigFile(std::string);
 
+  /*! Connect to devices described in the configuration contained within the string */
+  PlusStatus ConnectToDevicesByConfigString(std::string configFileString);
+
   /*! Called whenever a key is pressed while the windows is active, used for intercepting the ESC key */
   virtual void keyPressEvent(QKeyEvent* e);
 
@@ -89,9 +92,6 @@ protected:
 
   /*! Parse a given log line for salient information from the PlusServer */
   void ParseContent(const std::string& message);
-
-  /*! Connect to devices described in the configuration contained within the string*/
-  PlusStatus ConnectToDevicesByConfigString(const std::string& configFileString);
 
 protected:
   /*! Device set selector widget */
