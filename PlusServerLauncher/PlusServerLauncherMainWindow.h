@@ -78,7 +78,13 @@ protected slots:
   void LogLevelChanged();
 
   static void OnRemoteControlServerEventReceived(vtkObject* caller, unsigned long eventId, void* clientdata, void* calldata);
-  static void OnCommandRecieved(PlusServerLauncherMainWindow* self, igtlio::CommandDevicePointer command);
+  static void OnConnectEvent(PlusServerLauncherMainWindow* self, igtlio::ConnectorPointer connector);
+
+  static void OnCommandReceivedEvent(PlusServerLauncherMainWindow* self, igtlio::LogicPointer logic);
+  static void OnCommandReceived(PlusServerLauncherMainWindow* self, igtlio::CommandDevicePointer);
+
+  /*! Stop server process, disconnect outputs. Returns with true on success (shutdown on request was successful, without forcing). */
+  bool StopServer();
 
 protected:
   /*! Receive standard output or error and send it to the log */
@@ -86,9 +92,6 @@ protected:
 
   /*! Start server process, connect outputs to logger. Returns with true on success. */
   bool StartServer(const QString& configFilePath);
-
-  /*! Stop server process, disconnect outputs. Returns with true on success (shutdown on request was successful, without forcing). */
-  bool StopServer();
 
   /*! Parse a given log line for salient information from the PlusServer */
   void ParseContent(const std::string& message);
@@ -105,6 +108,7 @@ protected:
 
   /*! OpenIGTLink server that allows remote control of launcher (start/stop a PlusServer process, etc) */
   int m_RemoteControlServerPort;
+  std::vector<igtlio::ConnectorPointer> connections;
   vtkSmartPointer<vtkCallbackCommand>   m_RemoteControlServerCallbackCommand;
   igtlio::LogicPointer                  m_RemoteControlServerLogic;
   igtlio::ConnectorPointer              m_RemoteControlServerConnector;
