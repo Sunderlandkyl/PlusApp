@@ -148,6 +148,7 @@ PlusServerLauncherMainWindow::PlusServerLauncherMainWindow(QWidget* parent /*=0*
 
   LOG_INFO("Server IP addresses: " << ipAddresses.toLatin1().constData());
 
+  m_CommandId = 0;
   if (m_RemoteControlServerPort != PlusServerLauncherMainWindow::RemoteControlServerPortDisable)
   {
     if (m_RemoteControlServerPort == PlusServerLauncherMainWindow::RemoteControlServerPortUseDefault)
@@ -272,6 +273,14 @@ bool PlusServerLauncherMainWindow::StopServer()
     if (m_RemoteControlActive.second)
     {
       //LOG_ERROR("SERVER SHUTDOWN WITH CONNECTION");
+      /*m_Connections*/
+      for (std::vector<igtlio::ConnectorPointer>::iterator connection = m_Connections.begin(); connection != m_Connections.end(); ++connection)
+      {
+        std::stringstream deviceNameStream;
+        deviceNameStream << "CMD_" << m_CommandId;
+        (*connection)->SendCommand(deviceNameStream.str(), "ServerStopped", "<Command><Test /></Command>");
+      }
+      ++m_CommandId;
     }
   }
   delete m_CurrentServerInstance;
@@ -299,7 +308,7 @@ void PlusServerLauncherMainWindow::ParseContent(const std::string& message)
   else if (message.find("Server status: ") != std::string::npos)
   {
     // pull off server status and display it
-    this->m_DeviceSetSelectorWidget->SetDescriptionSuffix(QString(message.c_str()));
+    m_DeviceSetSelectorWidget->SetDescriptionSuffix(QString(message.c_str()));
   }
 }
 
@@ -596,6 +605,24 @@ void PlusServerLauncherMainWindow::OnRemoteControlServerEventReceived(vtkObject*
 
 void PlusServerLauncherMainWindow::OnConnectEvent(PlusServerLauncherMainWindow* self, igtlio::ConnectorPointer connector)
 {
+  std::string addr = "unknown";
+  int port = 0;
+
+  for (std::vector<igtlio::ClientData>::iterator connection = connector->ConnectedClients.begin(); connection != connector->ConnectedClients.end(); ++connection)
+  {
+    igtlio::ClientData c = (*connection);
+    c.Socket->GetSocketAddressAndPort(addr, port);
+    LOG_INFO("Stored :" << c.Address << " || " << c.Port << std::endl);
+    LOG_INFO("Socket :" << addr << " || " << port << std::endl);
+  }
+  connector->ConnectedClients;
+  //connector->Connected->GetSocketAddressAndPort(addr, port);
+  LOG_ERROR("!");
+  LOG_WARNING(connector->GetType());
+  LOG_WARNING(connector->GetState());
+  LOG_WARNING(addr);
+  LOG_WARNING(port);
+
 }
 
 
@@ -630,7 +657,7 @@ void PlusServerLauncherMainWindow::OnCommandReceived(PlusServerLauncherMainWindo
   int id = contentData.id;
   std::string commandName = contentData.name;
   std::string content = contentData.content;
-  LOG_ERROR(commandName);
+
   if (STRCASECMP(commandName.c_str(), "StartServer") == 0)
   {
     LOG_INFO("Server Start command received")
@@ -661,16 +688,25 @@ void PlusServerLauncherMainWindow::OnCommandReceived(PlusServerLauncherMainWindo
   {
 
     LOG_INFO("Server stop command received");
-    LOG_INFO(content);
 
     bool serverStopped = false;
     QMetaObject::invokeMethod(self,
       "StopServer",
       Qt::BlockingQueuedConnection,
       Q_RETURN_ARG(bool, serverStopped));
-    if (!serverStopped)
+    if (serverStopped)
     {
-      LOG_ERROR("COULD NOT STOP SERVER!");
+      self->m_RemoteControlServerSession->SendCommandResponse(commandDevice->GetDeviceName(), commandName,
+        "<Command>\n"
+        "  <Result success=true>\n"
+        "</Command>");
+    }
+    else
+    {
+      self->m_RemoteControlServerSession->SendCommandResponse(commandDevice->GetDeviceName(), commandName,
+        "<Command>\n"
+        "  <Result success=false>\n"
+        "</Command>");
     }
   }
 

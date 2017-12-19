@@ -108,13 +108,14 @@ protected:
 
   /*! OpenIGTLink server that allows remote control of launcher (start/stop a PlusServer process, etc) */
   int m_RemoteControlServerPort;
-  std::vector<igtlio::ConnectorPointer> connections;
   vtkSmartPointer<vtkCallbackCommand>   m_RemoteControlServerCallbackCommand;
   igtlio::LogicPointer                  m_RemoteControlServerLogic;
   igtlio::ConnectorPointer              m_RemoteControlServerConnector;
   igtlio::SessionPointer                m_RemoteControlServerSession;
   vtkSmartPointer<vtkMultiThreader>     m_Threader;
+  std::vector<igtlio::ConnectorPointer> m_Connections;
   std::pair<bool, bool> m_RemoteControlActive;
+  int m_CommandId;
 
   PlusStatus StartRemoteControlServer();
   static void* PlusServerLauncherMainWindow::PlusRemoteThread(vtkMultiThreader::ThreadInfo* data);
