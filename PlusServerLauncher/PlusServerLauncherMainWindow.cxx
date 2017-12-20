@@ -68,8 +68,6 @@ PlusServerLauncherMainWindow::PlusServerLauncherMainWindow(QWidget* parent /*=0*
   m_DeviceSetSelectorWidget->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
   m_DeviceSetSelectorWidget->SetConnectButtonText(QString("Launch server"));
   connect(m_DeviceSetSelectorWidget, SIGNAL(ConnectToDevicesByConfigFileInvoked(std::string)), this, SLOT(ConnectToDevicesByConfigFile(std::string)));
-  connect(m_DeviceSetSelectorWidget, SIGNAL(ConnectToDevicesByConfigStringInvoked(std::string)), this, SLOT(ConnectToDevicesByConfigString(std::string)));
-  connect(m_DeviceSetSelectorWidget, SIGNAL(StopServerInvoked()), this, SLOT(StopServer()));
 
   // Create status icon
   QPlusStatusIcon* statusIcon = new QPlusStatusIcon(NULL);
@@ -352,7 +350,7 @@ PlusStatus PlusServerLauncherMainWindow::ConnectToDevicesByConfigString(std::str
 {
   std::string filename;
   PlusCommon::CreateTemporaryFilename(filename, vtkPlusConfig::GetInstance()->GetOutputDirectory());
-
+  //m_DeviceSetSelectorWidget->Co
   ofstream file;
   file.open(filename);
   file << configFileString;
@@ -591,7 +589,6 @@ void PlusServerLauncherMainWindow::OnRemoteControlServerEventReceived(vtkObject*
     break;
   case igtlio::Connector::DisconnectedEvent:
     break;
-
   case igtlio::Logic::CommandReceivedEvent:
     PlusServerLauncherMainWindow::OnCommandReceivedEvent(self, logic);
     break;
@@ -605,31 +602,12 @@ void PlusServerLauncherMainWindow::OnRemoteControlServerEventReceived(vtkObject*
 
 void PlusServerLauncherMainWindow::OnConnectEvent(PlusServerLauncherMainWindow* self, igtlio::ConnectorPointer connector)
 {
-  std::string addr = "unknown";
-  int port = 0;
-
-  for (std::vector<igtlio::ClientData>::iterator connection = connector->ConnectedClients.begin(); connection != connector->ConnectedClients.end(); ++connection)
-  {
-    igtlio::ClientData c = (*connection);
-    c.Socket->GetSocketAddressAndPort(addr, port);
-    LOG_INFO("Stored :" << c.Address << " || " << c.Port << std::endl);
-    LOG_INFO("Socket :" << addr << " || " << port << std::endl);
-  }
-  connector->ConnectedClients;
-  //connector->Connected->GetSocketAddressAndPort(addr, port);
-  LOG_ERROR("!");
-  LOG_WARNING(connector->GetType());
-  LOG_WARNING(connector->GetState());
-  LOG_WARNING(addr);
-  LOG_WARNING(port);
-
 }
 
 
 //---------------------------------------------------------------------------
 void PlusServerLauncherMainWindow::OnCommandReceivedEvent(PlusServerLauncherMainWindow* self, igtlio::LogicPointer logic)
 {
-
   if (!logic)
   {
     LOG_ERROR("Command event could not be read!");
@@ -641,17 +619,18 @@ void PlusServerLauncherMainWindow::OnCommandReceivedEvent(PlusServerLauncherMain
     if (STRCASECMP(device->GetDeviceType().c_str(), "COMMAND") == 0)
     {
       igtlio::CommandDevicePointer commandDevice = igtlio::CommandDevice::SafeDownCast(device);
-      if (device->MessageDirectionIsIn())
+      if (commandDevice && commandDevice->MessageDirectionIsIn())
       {
-        PlusServerLauncherMainWindow::OnCommandReceived(self, commandDevice);
+        PlusServerLauncherMainWindow::ParseCommand(self, commandDevice);
       }
+      // TODO: should device be deleted after receiving command?
       logic->RemoveDevice(i);
     }
   }
 }
 
 //---------------------------------------------------------------------------
-void PlusServerLauncherMainWindow::OnCommandReceived(PlusServerLauncherMainWindow* self, igtlio::CommandDevicePointer commandDevice)
+void PlusServerLauncherMainWindow::ParseCommand(PlusServerLauncherMainWindow* self, igtlio::CommandDevicePointer commandDevice)
 {
   igtlio::CommandConverter::ContentData contentData = commandDevice->GetContent();
   int id = contentData.id;
@@ -662,52 +641,45 @@ void PlusServerLauncherMainWindow::OnCommandReceived(PlusServerLauncherMainWindo
   {
     LOG_INFO("Server Start command received")
 
-      // Attempt to connect to the server, the connection process will block this thread
-      PlusStatus connectionSuccessful = PLUS_FAIL;
+    // Attempt to connect to the server, the connection process will block this thread
+    PlusStatus serverStartSuccess = PLUS_FAIL;
     QMetaObject::invokeMethod(self,
       "ConnectToDevicesByConfigString",
       Qt::BlockingQueuedConnection,
-      Q_RETURN_ARG(PlusStatus, connectionSuccessful),
+      Q_RETURN_ARG(PlusStatus, serverStartSuccess),
       Q_ARG(std::string, content));
-    if (connectionSuccessful)
-    {
-      self->m_RemoteControlServerSession->SendCommandResponse(commandDevice->GetDeviceName(), commandName,
-        "<Command>\n"
-        "  <Result success=true>\n"
-        "</Command>");
-    }
-    else
-    {
-      self->m_RemoteControlServerSession->SendCommandResponse(commandDevice->GetDeviceName(), commandName,
-        "<Command>\n"
-        "  <Result success=false>\n"
-        "</Command>");
-    }
+    PlusServerLauncherMainWindow::RespondToCommand(self, commandDevice, serverStartSuccess);
   }
   else if (STRCASECMP(commandName.c_str(), "StopServer") == 0)
   {
-
     LOG_INFO("Server stop command received");
+    bool serverStopSuccess = PLUS_FAIL;
+    QMetaObject::invokeMethod(self->m_DeviceSetSelectorWidget,
+      "InvokeDisconnect",
+      Qt::BlockingQueuedConnection);
+    PlusServerLauncherMainWindow::RespondToCommand(self, commandDevice, serverStopSuccess);
+  }
 
-    bool serverStopped = false;
-    QMetaObject::invokeMethod(self,
-      "StopServer",
-      Qt::BlockingQueuedConnection,
-      Q_RETURN_ARG(bool, serverStopped));
-    if (serverStopped)
-    {
-      self->m_RemoteControlServerSession->SendCommandResponse(commandDevice->GetDeviceName(), commandName,
-        "<Command>\n"
-        "  <Result success=true>\n"
-        "</Command>");
-    }
-    else
-    {
-      self->m_RemoteControlServerSession->SendCommandResponse(commandDevice->GetDeviceName(), commandName,
-        "<Command>\n"
-        "  <Result success=false>\n"
-        "</Command>");
-    }
+}
+
+void PlusServerLauncherMainWindow::RespondToCommand(PlusServerLauncherMainWindow* self, igtlio::CommandDevicePointer commandDevice, bool success)
+{
+  igtlio::CommandConverter::ContentData contentData = commandDevice->GetContent();
+  std::string commandName = contentData.name;
+
+  if (success)
+  {
+    self->m_RemoteControlServerSession->SendCommandResponse(commandDevice->GetDeviceName(), commandName,
+      "<Command>\n"
+      "  <Result success=true>\n"
+      "</Command>");
+  }
+  else
+  {
+    self->m_RemoteControlServerSession->SendCommandResponse(commandDevice->GetDeviceName(), commandName,
+      "<Command>\n"
+      "  <Result success=false>\n"
+      "</Command>");
   }
 
 }

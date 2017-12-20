@@ -81,7 +81,8 @@ protected slots:
   static void OnConnectEvent(PlusServerLauncherMainWindow* self, igtlio::ConnectorPointer connector);
 
   static void OnCommandReceivedEvent(PlusServerLauncherMainWindow* self, igtlio::LogicPointer logic);
-  static void OnCommandReceived(PlusServerLauncherMainWindow* self, igtlio::CommandDevicePointer);
+  static void ParseCommand(PlusServerLauncherMainWindow* self, igtlio::CommandDevicePointer);
+  static void RespondToCommand(PlusServerLauncherMainWindow* self, igtlio::CommandDevicePointer commandDevice, bool success);
 
   /*! Stop server process, disconnect outputs. Returns with true on success (shutdown on request was successful, without forcing). */
   bool StopServer();
