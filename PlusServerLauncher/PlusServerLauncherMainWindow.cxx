@@ -529,6 +529,11 @@ void PlusServerLauncherMainWindow::LogLevelChanged()
   vtkPlusLogger::Instance()->SetLogLevel(ui.comboBox_LogLevel->currentData().toInt());
 }
 
+void PlusServerLauncherMainWindow::SetLogLevel(int logLevel)
+{
+  this->ui.comboBox_LogLevel->setCurrentIndex(this->ui.comboBox_LogLevel->findData(QVariant(logLevel)));
+}
+
 //---------------------------------------------------------------------------
 PlusStatus PlusServerLauncherMainWindow::StartRemoteControlServer()
 {
@@ -637,21 +642,68 @@ void PlusServerLauncherMainWindow::ParseCommand(PlusServerLauncherMainWindow* se
   std::string commandName = contentData.name;
   std::string content = contentData.content;
 
-  if (STRCASECMP(commandName.c_str(), "StartServer") == 0)
+  vtkSmartPointer<vtkXMLDataElement> rootElement = vtkSmartPointer<vtkXMLDataElement>::Take(vtkXMLUtilities::ReadElementFromString(content.c_str()));
+  if (!rootElement)
   {
-    LOG_INFO("Server Start command received")
-
-    // Attempt to connect to the server, the connection process will block this thread
-    PlusStatus serverStartSuccess = PLUS_FAIL;
-    QMetaObject::invokeMethod(self,
-      "ConnectToDevicesByConfigString",
-      Qt::BlockingQueuedConnection,
-      Q_RETURN_ARG(PlusStatus, serverStartSuccess),
-      Q_ARG(std::string, content));
-    PlusServerLauncherMainWindow::RespondToCommand(self, commandDevice, serverStartSuccess);
+    LOG_ERROR("ParseCommand: Error parsing xml");
+    return;
   }
-  else if (STRCASECMP(commandName.c_str(), "StopServer") == 0)
+
+  vtkSmartPointer<vtkXMLDataElement> startServerElement = rootElement->FindNestedElementWithName("StartServer");
+  vtkSmartPointer<vtkXMLDataElement> stopServerElement = rootElement->FindNestedElementWithName("StopServer");
+
+  if (startServerElement)
   {
+
+    LOG_INFO("Server Start command received");
+
+    std::string configFileString = "None";
+
+    vtkSmartPointer<vtkXMLDataElement> configFileElement = startServerElement->FindNestedElementWithName("PlusConfiguration");
+    if (configFileElement)
+    {
+      std::stringstream configFileStream;
+      vtkXMLUtilities::FlattenElement(configFileElement, configFileStream);
+      configFileString = configFileStream.str();
+    }
+
+
+    vtkSmartPointer<vtkXMLDataElement> logLevelElement = startServerElement->FindNestedElementWithName("LogLevel");
+    if (logLevelElement)
+    {
+      const char* logLevelAttribute = logLevelElement->GetAttribute("Level");
+      if (logLevelAttribute)
+      {
+        int logLevel = std::strtol(logLevelAttribute, NULL, 10);
+        QMetaObject::invokeMethod(self,
+          "SetLogLevel",
+          Qt::BlockingQueuedConnection,
+          Q_ARG(int, logLevel));
+      }
+    }
+
+    //self->ui.comboBox_LogLevel->findData(QVariant(logLevel));
+
+    if (STRCASECMP(configFileString.c_str(), "None") == 0)
+    {
+      // TODO: what to do if user doesn't specify config file?
+      // Activate with currently selected config file?
+    }
+    else
+    {
+      // Attempt to connect to the server, the connection process will block this thread
+      PlusStatus serverStartSuccess = PLUS_FAIL;
+      QMetaObject::invokeMethod(self,
+        "ConnectToDevicesByConfigString",
+        Qt::BlockingQueuedConnection,
+        Q_RETURN_ARG(PlusStatus, serverStartSuccess),
+        Q_ARG(std::string, configFileString));
+      PlusServerLauncherMainWindow::RespondToCommand(self, commandDevice, serverStartSuccess);
+    }
+  }
+  else if (stopServerElement)
+  {
+    //TODO: Any info to read for stop command?
     LOG_INFO("Server stop command received");
     bool serverStopSuccess = PLUS_FAIL;
     QMetaObject::invokeMethod(self->m_DeviceSetSelectorWidget,
@@ -667,19 +719,18 @@ void PlusServerLauncherMainWindow::RespondToCommand(PlusServerLauncherMainWindow
   igtlio::CommandConverter::ContentData contentData = commandDevice->GetContent();
   std::string commandName = contentData.name;
 
+  std::stringstream responseStream;
+  responseStream <<   "<Command>\n";
   if (success)
   {
-    self->m_RemoteControlServerSession->SendCommandResponse(commandDevice->GetDeviceName(), commandName,
-      "<Command>\n"
-      "  <Result success=true>\n"
-      "</Command>");
+    responseStream << "  <Result success=true>\n";
   }
   else
   {
-    self->m_RemoteControlServerSession->SendCommandResponse(commandDevice->GetDeviceName(), commandName,
-      "<Command>\n"
-      "  <Result success=false>\n"
-      "</Command>");
+    responseStream << "  <Result success=false>\n";
   }
+  responseStream << "</Command>";
+
+  self->m_RemoteControlServerSession->SendCommandResponse(commandDevice->GetDeviceName(), commandName, responseStream.str());
 
 }

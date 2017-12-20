@@ -77,6 +77,8 @@ protected slots:
 
   void LogLevelChanged();
 
+  void SetLogLevel(int logLevel);
+
   static void OnRemoteControlServerEventReceived(vtkObject* caller, unsigned long eventId, void* clientdata, void* calldata);
   static void OnConnectEvent(PlusServerLauncherMainWindow* self, igtlio::ConnectorPointer connector);
 
