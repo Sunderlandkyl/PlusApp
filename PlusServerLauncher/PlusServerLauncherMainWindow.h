@@ -84,7 +84,7 @@ protected slots:
 
   static void OnCommandReceivedEvent(PlusServerLauncherMainWindow* self, igtlio::LogicPointer logic);
   static void ParseCommand(PlusServerLauncherMainWindow* self, igtlio::CommandDevicePointer);
-  static void RespondToCommand(PlusServerLauncherMainWindow* self, igtlio::CommandDevicePointer commandDevice, bool success);
+  static void RespondToCommand(PlusServerLauncherMainWindow* self, igtlio::CommandDevicePointer commandDevice, vtkXMLDataElement* response);
 
   /*! Stop server process, disconnect outputs. Returns with true on success (shutdown on request was successful, without forcing). */
   bool StopServer();

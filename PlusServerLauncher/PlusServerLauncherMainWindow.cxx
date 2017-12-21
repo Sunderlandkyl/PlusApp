@@ -642,6 +642,8 @@ void PlusServerLauncherMainWindow::ParseCommand(PlusServerLauncherMainWindow* se
   std::string commandName = contentData.name;
   std::string content = contentData.content;
 
+  std::vector<vtkSmartPointer<vtkXMLDataElement>> responseDataElements;
+
   vtkSmartPointer<vtkXMLDataElement> rootElement = vtkSmartPointer<vtkXMLDataElement>::Take(vtkXMLUtilities::ReadElementFromString(content.c_str()));
   if (!rootElement)
   {
@@ -651,14 +653,12 @@ void PlusServerLauncherMainWindow::ParseCommand(PlusServerLauncherMainWindow* se
 
   vtkSmartPointer<vtkXMLDataElement> startServerElement = rootElement->FindNestedElementWithName("StartServer");
   vtkSmartPointer<vtkXMLDataElement> stopServerElement = rootElement->FindNestedElementWithName("StopServer");
-
   if (startServerElement)
   {
 
     LOG_INFO("Server Start command received");
 
     std::string configFileString = "None";
-
     vtkSmartPointer<vtkXMLDataElement> configFileElement = startServerElement->FindNestedElementWithName("PlusConfiguration");
     if (configFileElement)
     {
@@ -667,22 +667,18 @@ void PlusServerLauncherMainWindow::ParseCommand(PlusServerLauncherMainWindow* se
       configFileString = configFileStream.str();
     }
 
-
     vtkSmartPointer<vtkXMLDataElement> logLevelElement = startServerElement->FindNestedElementWithName("LogLevel");
     if (logLevelElement)
     {
-      const char* logLevelAttribute = logLevelElement->GetAttribute("Level");
-      if (logLevelAttribute)
+      int logLevel = 0;
+      if (logLevelElement->GetScalarAttribute("Level", logLevel))
       {
-        int logLevel = std::strtol(logLevelAttribute, NULL, 10);
         QMetaObject::invokeMethod(self,
           "SetLogLevel",
           Qt::BlockingQueuedConnection,
           Q_ARG(int, logLevel));
       }
     }
-
-    //self->ui.comboBox_LogLevel->findData(QVariant(logLevel));
 
     if (STRCASECMP(configFileString.c_str(), "None") == 0)
     {
@@ -698,7 +694,11 @@ void PlusServerLauncherMainWindow::ParseCommand(PlusServerLauncherMainWindow* se
         Qt::BlockingQueuedConnection,
         Q_RETURN_ARG(PlusStatus, serverStartSuccess),
         Q_ARG(std::string, configFileString));
-      PlusServerLauncherMainWindow::RespondToCommand(self, commandDevice, serverStartSuccess);
+
+      vtkSmartPointer<vtkXMLDataElement> startServerResponse = vtkSmartPointer<vtkXMLDataElement>::New();
+      startServerResponse->SetName("StartServer");
+      startServerResponse->SetAttribute("Success", serverStartSuccess ? "true" : "false");
+      responseDataElements.push_back(startServerResponse);
     }
   }
   else if (stopServerElement)
@@ -709,28 +709,56 @@ void PlusServerLauncherMainWindow::ParseCommand(PlusServerLauncherMainWindow* se
     QMetaObject::invokeMethod(self->m_DeviceSetSelectorWidget,
       "InvokeDisconnect",
       Qt::BlockingQueuedConnection);
-    PlusServerLauncherMainWindow::RespondToCommand(self, commandDevice, serverStopSuccess);
+
+    vtkSmartPointer<vtkXMLDataElement> stopServerResponse = vtkSmartPointer<vtkXMLDataElement>::New();
+    stopServerResponse->SetName("StopServer");
+    //stopServerResponse->SetAttribute("Success", serverStopSuccess ? "true" : "false"); //TODO: currently no measure of success for if server stops
+    stopServerResponse->SetAttribute("Success", "true");
+    responseDataElements.push_back(stopServerResponse);
   }
+
+  // Look for all of the "Get" statements
+  for (int i = 0; i < rootElement->GetNumberOfNestedElements(); ++i)
+  {
+    vtkSmartPointer<vtkXMLDataElement> nestedElement = rootElement->GetNestedElement(i);
+    if (STRCASECMP(nestedElement->GetName(), "Get") == 0)
+    {
+      const char* parameterName = nestedElement->GetAttribute("Name");
+      if (parameterName)
+      {
+        vtkSmartPointer<vtkXMLDataElement> getResponseElement = vtkSmartPointer<vtkXMLDataElement>::New();
+        if (STRCASECMP(parameterName, "Status") == 0)
+        {
+          getResponseElement->SetName(nestedElement->GetName());
+          getResponseElement->SetAttribute("Status",
+            self->m_CurrentServerInstance->state() == QProcess::Running ? "Running" : "Off");
+        }
+        else
+        {
+          // Not a recognized parameter, move to the next "Get" element
+          continue;
+        }
+        responseDataElements.push_back(getResponseElement);
+      }
+    }
+  }
+
+  vtkSmartPointer<vtkXMLDataElement> commandResponseElementRoot = vtkSmartPointer<vtkXMLDataElement>::New();
+  commandResponseElementRoot->SetName("Command");
+  for (std::vector<vtkSmartPointer<vtkXMLDataElement>>::iterator it = responseDataElements.begin(); it != responseDataElements.end(); ++it)
+  {
+    commandResponseElementRoot->AddNestedElement(*it);
+  }
+  PlusServerLauncherMainWindow::RespondToCommand(self, commandDevice, commandResponseElementRoot);
 
 }
 
-void PlusServerLauncherMainWindow::RespondToCommand(PlusServerLauncherMainWindow* self, igtlio::CommandDevicePointer commandDevice, bool success)
+void PlusServerLauncherMainWindow::RespondToCommand(PlusServerLauncherMainWindow* self, igtlio::CommandDevicePointer commandDevice, vtkXMLDataElement* response)
 {
   igtlio::CommandConverter::ContentData contentData = commandDevice->GetContent();
   std::string commandName = contentData.name;
 
   std::stringstream responseStream;
-  responseStream <<   "<Command>\n";
-  if (success)
-  {
-    responseStream << "  <Result success=true>\n";
-  }
-  else
-  {
-    responseStream << "  <Result success=false>\n";
-  }
-  responseStream << "</Command>";
-
+  vtkXMLUtilities::FlattenElement(response, responseStream);
   self->m_RemoteControlServerSession->SendCommandResponse(commandDevice->GetDeviceName(), commandName, responseStream.str());
-
 }
