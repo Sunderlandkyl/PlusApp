@@ -346,10 +346,15 @@ void PlusServerLauncherMainWindow::ConnectToDevicesByConfigFile(std::string aCon
 }
 
 //---------------------------------------------------------------------------
-PlusStatus PlusServerLauncherMainWindow::ConnectToDevicesByConfigString(std::string configFileString)
+PlusStatus PlusServerLauncherMainWindow::ConnectToDevicesByConfigString(std::string configFileString, std::string filename)
 {
-  std::string filename;
-  PlusCommon::CreateTemporaryFilename(filename, vtkPlusConfig::GetInstance()->GetOutputDirectory());
+  //std::string filename;
+
+  if (STRCASECMP("", filename.c_str()) == 0)
+  {
+    PlusCommon::CreateTemporaryFilename(filename, vtkPlusConfig::GetInstance()->GetOutputDirectory());
+  }
+  
   //m_DeviceSetSelectorWidget->Co
   ofstream file;
   file.open(filename);
@@ -651,6 +656,7 @@ void PlusServerLauncherMainWindow::ParseCommand(PlusServerLauncherMainWindow* se
     return;
   }
 
+  //TODO: Command names should be stored in a variable somewhere else
   vtkSmartPointer<vtkXMLDataElement> startServerElement = rootElement->FindNestedElementWithName("StartServer");
   vtkSmartPointer<vtkXMLDataElement> stopServerElement = rootElement->FindNestedElementWithName("StopServer");
   if (startServerElement)
@@ -680,10 +686,25 @@ void PlusServerLauncherMainWindow::ParseCommand(PlusServerLauncherMainWindow* se
       }
     }
 
+    std::string fileNameAndPath = "";
+    vtkSmartPointer<vtkXMLDataElement> fileElement = startServerElement->FindNestedElementWithName("File");
+    if (fileElement)
+    {
+      const char* name = fileElement->GetAttribute("Name");
+      if (name)
+      {
+        std::string path = vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationDirectory();
+        fileNameAndPath = path + "/" + name;
+        LOG_WARNING(fileNameAndPath);
+      }
+      
+    }
+
     if (STRCASECMP(configFileString.c_str(), "None") == 0)
     {
       // TODO: what to do if user doesn't specify config file?
       // Activate with currently selected config file?
+      LOG_WARNING(self->m_DeviceSetSelectorWidget->windowFilePath().toStdString());
     }
     else
     {
@@ -729,9 +750,13 @@ void PlusServerLauncherMainWindow::ParseCommand(PlusServerLauncherMainWindow* se
         vtkSmartPointer<vtkXMLDataElement> getResponseElement = vtkSmartPointer<vtkXMLDataElement>::New();
         if (STRCASECMP(parameterName, "Status") == 0)
         {
+          const char* status = "Off";
+          if (self->m_CurrentServerInstance)
+          {
+            status = (self->m_CurrentServerInstance->state() == QProcess::Running) ? "Running" : "Off";
+          }
           getResponseElement->SetName(nestedElement->GetName());
-          getResponseElement->SetAttribute("Status",
-            self->m_CurrentServerInstance->state() == QProcess::Running ? "Running" : "Off");
+          getResponseElement->SetAttribute("Status", status);
         }
         else
         {

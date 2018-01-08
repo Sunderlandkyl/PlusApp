@@ -62,7 +62,7 @@ protected slots:
   void ConnectToDevicesByConfigFile(std::string);
 
   /*! Connect to devices described in the configuration contained within the string */
-  PlusStatus ConnectToDevicesByConfigString(std::string configFileString);
+  PlusStatus ConnectToDevicesByConfigString(std::string configFileString, std::string filename="");
 
   /*! Called whenever a key is pressed while the windows is active, used for intercepting the ESC key */
   virtual void keyPressEvent(QKeyEvent* e);
