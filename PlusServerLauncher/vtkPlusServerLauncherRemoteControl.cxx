@@ -16,7 +16,8 @@ vtkPlusServerLauncherRemoteControl::~vtkPlusServerLauncherRemoteControl()
 {
   if (this->RemoteControlServerLogic)
   {
-    this->RemoteControlServerLogic->RemoveObserver(this->RemoteControlServerCallbackCommand);
+    this->RemoteControlServerLogic->RemoveObserver(this->RemoteControlServerConnectCallback);
+    this->RemoteControlServerLogic->RemoveObserver(this->RemoteControlServerCommandCallback);
   }
 
   // Wait for remote control thread to terminate
@@ -31,19 +32,24 @@ vtkPlusServerLauncherRemoteControl::~vtkPlusServerLauncherRemoteControl()
 //---------------------------------------------------------------------------
 PlusStatus vtkPlusServerLauncherRemoteControl::StartRemoteControlServer()
 {
-  this->RemoteControlServerCallbackCommand = vtkSmartPointer<vtkCallbackCommand>::New();
-  this->RemoteControlServerCallbackCommand->SetCallback(vtkPlusServerLauncherRemoteControl::OnRemoteControlServerEventReceived);
-  this->RemoteControlServerCallbackCommand->SetClientData(this);
 
   LOG_INFO("Start remote control server at port: " << this->ServerPort);
   this->RemoteControlServerLogic = igtlio::LogicPointer::New();
-  this->RemoteControlServerLogic->AddObserver(igtlio::Logic::CommandReceivedEvent, this->RemoteControlServerCallbackCommand);
-  this->RemoteControlServerLogic->AddObserver(igtlio::Logic::CommandResponseReceivedEvent, this->RemoteControlServerCallbackCommand);
   this->RemoteControlServerSession = this->RemoteControlServerLogic->StartServer(this->ServerPort);
-
   this->RemoteControlServerConnector = this->RemoteControlServerSession->GetConnector();
-  this->RemoteControlServerConnector->AddObserver(igtlio::Connector::ConnectedEvent, this->RemoteControlServerCallbackCommand);
-  this->RemoteControlServerConnector->AddObserver(igtlio::Connector::DisconnectedEvent, this->RemoteControlServerCallbackCommand);
+
+  this->RemoteControlServerConnectCallback = vtkSmartPointer<vtkCallbackCommand>::New();
+  this->RemoteControlServerConnectCallback->SetCallback(vtkPlusServerLauncherRemoteControl::OnRemoteControlServerEventReceived);
+  this->RemoteControlServerConnectCallback->SetClientData(this);
+  this->RemoteControlServerConnector->AddObserver(igtlio::Connector::ConnectedEvent, this->RemoteControlServerConnectCallback);
+  this->RemoteControlServerConnector->AddObserver(igtlio::Connector::DisconnectedEvent, this->RemoteControlServerConnectCallback);
+
+  this->RemoteControlServerCommandCallback = vtkSmartPointer<vtkCallbackCommand>::New();
+  this->RemoteControlServerCommandCallback->SetCallback(vtkPlusServerLauncherRemoteControl::OnRemoteControlServerEventReceived);
+  this->RemoteControlServerCommandCallback->SetClientData(this);
+  this->RemoteControlServerLogic->AddObserver(igtlio::Logic::CommandReceivedEvent, this->RemoteControlServerCommandCallback);
+  this->RemoteControlServerLogic->AddObserver(igtlio::Logic::CommandResponseReceivedEvent, this->RemoteControlServerCommandCallback);
+
 
   // Create thread to receive commands
   this->Threader = vtkSmartPointer<vtkMultiThreader>::New();
@@ -51,6 +57,12 @@ PlusStatus vtkPlusServerLauncherRemoteControl::StartRemoteControlServer()
   this->RemoteControlActive.first = true;
   this->Threader->SpawnThread((vtkThreadFunctionType)&PlusRemoteThread, this);
 
+  return PLUS_SUCCESS;
+}
+
+//---------------------------------------------------------------------------
+PlusStatus vtkPlusServerLauncherRemoteControl::StopRemoteControlServer()
+{
   return PLUS_SUCCESS;
 }
 
@@ -98,6 +110,7 @@ void vtkPlusServerLauncherRemoteControl::OnRemoteControlServerEventReceived(vtkO
 
 }
 
+//---------------------------------------------------------------------------
 void vtkPlusServerLauncherRemoteControl::OnConnectEvent(vtkPlusServerLauncherRemoteControl* self, igtlio::ConnectorPointer connector)
 {
 }
@@ -148,123 +161,142 @@ void vtkPlusServerLauncherRemoteControl::ParseCommand(vtkPlusServerLauncherRemot
   vtkSmartPointer<vtkXMLDataElement> stopServerElement = rootElement->FindNestedElementWithName("StopServer");
   if (startServerElement)
   {
-
-    LOG_INFO("Server Start command received");
-
-    vtkSmartPointer<vtkXMLDataElement> logLevelElement = startServerElement->FindNestedElementWithName("LogLevel");
-    if (logLevelElement)
-    {
-      int logLevel = 0;
-      if (logLevelElement->GetScalarAttribute("Level", logLevel))
-      {
-        QMetaObject::invokeMethod(self->MainWindow,
-          "SetLogLevel",
-          Qt::BlockingQueuedConnection,
-          Q_ARG(int, logLevel));
-      }
-    }
-
-    // Get the filename from the command. The file will be saved to the config file directory with the specified name.
-    // If the file already exists, it will be overwritten.
-    // If no name is specified, it will be created as a .tmp file in the output directory.
-    std::string fileNameAndPath = "";
-    vtkSmartPointer<vtkXMLDataElement> fileElement = startServerElement->FindNestedElementWithName("File");
-    if (fileElement)
-    {
-      const char* name = fileElement->GetAttribute("Name");
-      if (name)
-      {
-        std::string path = vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationDirectory();
-        fileNameAndPath = path + "/" + name;
-        LOG_TRACE("Writing config file to: " << name);
-      }
-    }
-
-    // Contents of the config file. Identified by root element "PlusConfiguration"
-    std::string configFileContents = "None";
-    vtkSmartPointer<vtkXMLDataElement> configFileElement = startServerElement->FindNestedElementWithName("PlusConfiguration");
-    if (configFileElement)
-    {
-      std::stringstream configFileContentsStream;
-      vtkXMLUtilities::FlattenElement(configFileElement, configFileContentsStream);
-      configFileContents = configFileContentsStream.str();
-    }
-
-    if (STRCASECMP(configFileContents.c_str(), "None") == 0)
-    {
-      LOG_TRACE("No config file contents found!");
-      if (STRCASECMP(fileNameAndPath.c_str(), "") != 0)
-      {
-        // Attempt to connect to the server, the connection process will block this thread
-        LOG_TRACE("Attempting to start server using: " << fileNameAndPath);
-        PlusStatus serverStartSuccess = PLUS_FAIL;
-        QMetaObject::invokeMethod(self->MainWindow,
-          "ConnectToDevicesByConfigFile",
-          Qt::BlockingQueuedConnection,
-          Q_ARG(std::string, fileNameAndPath));
-      }
-      else
-      {
-        // TODO: what to do if user doesn't specify config file?
-        // Activate with currently selected config file?
-        LOG_TRACE("No config file name found!");
-        LOG_TRACE("Attempting to connect using the currently selected config file.");
-        QMetaObject::invokeMethod(self->DeviceSetSelectorWidget,
-          "InvokeConnect",
-          Qt::BlockingQueuedConnection);
-      }
-
-      std::string serverStarted = "false";
-      //if (self->CurrentServerInstance && self->CurrentServerInstance->state() == QProcess::Running)
-      //{
-      //  serverStarted = "true";
-      //}
-      serverStarted = "true";
-
-      vtkSmartPointer<vtkXMLDataElement> startServerResponse = vtkSmartPointer<vtkXMLDataElement>::New();
-      startServerResponse->SetName("StartServer");
-      startServerResponse->SetAttribute("Success", serverStarted.c_str());
-      commandResponseElementRoot->AddNestedElement(startServerResponse);
-    }
-    else
-    {
-      // Attempt to connect to the server, the connection process will block this thread
-      PlusStatus serverStartSuccess = PLUS_FAIL;
-      QMetaObject::invokeMethod(self->MainWindow,
-        "ConnectToDevicesByConfigString",
-        Qt::BlockingQueuedConnection,
-        Q_RETURN_ARG(PlusStatus, serverStartSuccess),
-        Q_ARG(std::string, configFileContents),
-        Q_ARG(std::string, fileNameAndPath));
-
-      vtkSmartPointer<vtkXMLDataElement> startServerResponse = vtkSmartPointer<vtkXMLDataElement>::New();
-      startServerResponse->SetName("StartServer");
-      startServerResponse->SetAttribute("Success", serverStartSuccess ? "true" : "false");
-      commandResponseElementRoot->AddNestedElement(startServerResponse);
-    }
+    self->StartServerCommand(self, startServerElement, commandResponseElementRoot);
   }
   else if (stopServerElement)
   {
-    //TODO: Any info to read for stop command?
-    LOG_INFO("Server stop command received");
-
-    bool serverStopSuccess = PLUS_FAIL;
-    QMetaObject::invokeMethod(self->DeviceSetSelectorWidget,
-      "InvokeDisconnect",
-      Qt::BlockingQueuedConnection);
-
-    std::string serverStopped = "true";
-    //if (self->CurrentServerInstance && self->CurrentServerInstance->state() == QProcess::Running)
-    //{
-    //  serverStopped = "false";
-    //}
-
-    vtkSmartPointer<vtkXMLDataElement> stopServerResponse = vtkSmartPointer<vtkXMLDataElement>::New();
-    stopServerResponse->SetName("StopServer");
-    stopServerResponse->SetAttribute("Success", serverStopped.c_str());
-    commandResponseElementRoot->AddNestedElement(stopServerResponse);
+    self->StopServerCommand(self, stopServerElement, commandResponseElementRoot);
   }
 
+  self->GetCommand(self, rootElement, commandResponseElementRoot);
+
+  vtkPlusServerLauncherRemoteControl::RespondToCommand(self, commandDevice, commandResponseElementRoot);
+}
+
+//---------------------------------------------------------------------------
+void vtkPlusServerLauncherRemoteControl::StartServerCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* startServerElement, vtkXMLDataElement* commandResponseElementRoot)
+{
+  LOG_INFO("Server Start command received");
+
+  vtkSmartPointer<vtkXMLDataElement> logLevelElement = startServerElement->FindNestedElementWithName("LogLevel");
+  if (logLevelElement)
+  {
+    int logLevel = 0;
+    if (logLevelElement->GetScalarAttribute("Level", logLevel))
+    {
+      QMetaObject::invokeMethod(self->MainWindow,
+        "SetLogLevel",
+        Qt::BlockingQueuedConnection,
+        Q_ARG(int, logLevel));
+    }
+  }
+
+  // Get the filename from the command. The file will be saved to the config file directory with the specified name.
+  // If the file already exists, it will be overwritten.
+  // If no name is specified, it will be created as a .tmp file in the output directory.
+  std::string fileNameAndPath = "";
+  vtkSmartPointer<vtkXMLDataElement> fileElement = startServerElement->FindNestedElementWithName("File");
+  if (fileElement)
+  {
+    const char* name = fileElement->GetAttribute("Name");
+    if (name)
+    {
+      std::string path = vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationDirectory();
+      fileNameAndPath = path + "/" + name;
+      LOG_TRACE("Writing config file to: " << name);
+    }
+  }
+
+  // Contents of the config file. Identified by root element "PlusConfiguration"
+  std::string configFileContents = "None";
+  vtkSmartPointer<vtkXMLDataElement> configFileElement = startServerElement->FindNestedElementWithName("PlusConfiguration");
+  if (configFileElement)
+  {
+    std::stringstream configFileContentsStream;
+    vtkXMLUtilities::FlattenElement(configFileElement, configFileContentsStream);
+    configFileContents = configFileContentsStream.str();
+  }
+
+  if (STRCASECMP(configFileContents.c_str(), "None") == 0)
+  {
+    LOG_TRACE("No config file contents found!");
+    if (STRCASECMP(fileNameAndPath.c_str(), "") != 0)
+    {
+      // Attempt to connect to the server, the connection process will block this thread
+      LOG_TRACE("Attempting to start server using: " << fileNameAndPath);
+      PlusStatus serverStartSuccess = PLUS_FAIL;
+      QMetaObject::invokeMethod(self->MainWindow,
+        "ConnectToDevicesByConfigFile",
+        Qt::BlockingQueuedConnection,
+        Q_ARG(std::string, fileNameAndPath));
+    }
+    else
+    {
+      // TODO: what to do if user doesn't specify config file?
+      // Activate with currently selected config file?
+      LOG_TRACE("No config file name found!");
+      LOG_TRACE("Attempting to connect using the currently selected config file.");
+      QMetaObject::invokeMethod(self->DeviceSetSelectorWidget,
+        "InvokeConnect",
+        Qt::BlockingQueuedConnection);
+    }
+
+    std::string serverStarted = "false";
+    //if (self->CurrentServerInstance && self->CurrentServerInstance->state() == QProcess::Running)
+    //{
+    //  serverStarted = "true";
+    //}
+    serverStarted = "true";
+
+    vtkSmartPointer<vtkXMLDataElement> startServerResponse = vtkSmartPointer<vtkXMLDataElement>::New();
+    startServerResponse->SetName("StartServer");
+    startServerResponse->SetAttribute("Success", serverStarted.c_str());
+    commandResponseElementRoot->AddNestedElement(startServerResponse);
+  }
+  else
+  {
+    // Attempt to connect to the server, the connection process will block this thread
+    PlusStatus serverStartSuccess = PLUS_FAIL;
+    QMetaObject::invokeMethod(self->MainWindow,
+      "ConnectToDevicesByConfigString",
+      Qt::BlockingQueuedConnection,
+      Q_RETURN_ARG(PlusStatus, serverStartSuccess),
+      Q_ARG(std::string, configFileContents),
+      Q_ARG(std::string, fileNameAndPath));
+
+    vtkSmartPointer<vtkXMLDataElement> startServerResponse = vtkSmartPointer<vtkXMLDataElement>::New();
+    startServerResponse->SetName("StartServer");
+    startServerResponse->SetAttribute("Success", serverStartSuccess ? "true" : "false");
+    commandResponseElementRoot->AddNestedElement(startServerResponse);
+  }
+}
+
+//---------------------------------------------------------------------------
+void vtkPlusServerLauncherRemoteControl::StopServerCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* startServerElement, vtkXMLDataElement* commandResponseElementRoot)
+{
+  //TODO: Any info to read for stop command?
+  LOG_INFO("Server stop command received");
+
+  bool serverStopSuccess = PLUS_FAIL;
+  QMetaObject::invokeMethod(self->DeviceSetSelectorWidget,
+    "InvokeDisconnect",
+    Qt::BlockingQueuedConnection);
+
+  std::string serverStopped = "true";
+  //if (self->CurrentServerInstance && self->CurrentServerInstance->state() == QProcess::Running)
+  //{
+  //  serverStopped = "false";
+  //}
+
+  vtkSmartPointer<vtkXMLDataElement> stopServerResponse = vtkSmartPointer<vtkXMLDataElement>::New();
+  stopServerResponse->SetName("StopServer");
+  stopServerResponse->SetAttribute("Success", serverStopped.c_str());
+  commandResponseElementRoot->AddNestedElement(stopServerResponse);
+}
+
+//---------------------------------------------------------------------------
+void vtkPlusServerLauncherRemoteControl::GetCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* rootElement, vtkXMLDataElement* commandResponseElementRoot)
+{
   // Look for all of the "Get" statements
   for (int i = 0; i < rootElement->GetNumberOfNestedElements(); ++i)
   {
@@ -280,7 +312,7 @@ void vtkPlusServerLauncherRemoteControl::ParseCommand(vtkPlusServerLauncherRemot
         if (STRCASECMP(parameterName, "Status") == 0)
         {
           const char* status = "Off";
-          //if (self->CurrentServerInstance)
+          //if (self->MainWindow->GetServerStatus())
           //{
           //  status = (self->CurrentServerInstance->state() == QProcess::Running) ? "Running" : "Off";
           //}
@@ -297,11 +329,9 @@ void vtkPlusServerLauncherRemoteControl::ParseCommand(vtkPlusServerLauncherRemot
       }
     }
   }
-
-  vtkPlusServerLauncherRemoteControl::RespondToCommand(self, commandDevice, commandResponseElementRoot);
-
 }
 
+//---------------------------------------------------------------------------
 void vtkPlusServerLauncherRemoteControl::RespondToCommand(vtkPlusServerLauncherRemoteControl* self, igtlio::CommandDevicePointer commandDevice, vtkXMLDataElement* response)
 {
   igtlio::CommandConverter::ContentData contentData = commandDevice->GetContent();
@@ -312,6 +342,7 @@ void vtkPlusServerLauncherRemoteControl::RespondToCommand(vtkPlusServerLauncherR
   self->RemoteControlServerSession->SendCommandResponse(commandDevice->GetDeviceName(), commandName, responseStream.str());
 }
 
+//---------------------------------------------------------------------------
 void vtkPlusServerLauncherRemoteControl::SendServerShutdownSignal()
 {
   LOG_TRACE("Server shutdown signal");
