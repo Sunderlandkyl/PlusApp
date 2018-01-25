@@ -25,6 +25,7 @@ class QWidget;
 class vtkPlusDataCollector;
 class vtkPlusOpenIGTLinkServer;
 class vtkPlusTransformRepository;
+class vtkPlusServerLauncherRemoteControl;
 
 //-----------------------------------------------------------------------------
 
@@ -54,15 +55,21 @@ public:
   PlusServerLauncherMainWindow(QWidget* parent = 0, Qt::WindowFlags flags = 0, bool autoConnect = false, int remoteControlServerPort = RemoteControlServerPortUseDefault);
   ~PlusServerLauncherMainWindow();
 
-protected slots:
+public slots:
   /*!
-    Connect to devices described in the argument configuration file in response by clicking on the Connect button
-    \param aConfigFile DeviceSet configuration file path and name
+  Connect to devices described in the argument configuration file in response by clicking on the Connect button
+  \param aConfigFile DeviceSet configuration file path and name
   */
   void ConnectToDevicesByConfigFile(std::string);
 
   /*! Connect to devices described in the configuration contained within the string */
-  PlusStatus ConnectToDevicesByConfigString(std::string configFileString, std::string filename="");
+  PlusStatus ConnectToDevicesByConfigString(std::string configFileString, std::string filename = "");
+
+  void SetLogLevel(int logLevel);
+
+  int GetServerStatus();
+
+protected slots:
 
   /*! Called whenever a key is pressed while the windows is active, used for intercepting the ESC key */
   virtual void keyPressEvent(QKeyEvent* e);
@@ -76,15 +83,6 @@ protected slots:
   void ServerExecutableFinished(int returnCode, QProcess::ExitStatus status);
 
   void LogLevelChanged();
-
-  void SetLogLevel(int logLevel);
-
-  static void OnRemoteControlServerEventReceived(vtkObject* caller, unsigned long eventId, void* clientdata, void* calldata);
-  static void OnConnectEvent(PlusServerLauncherMainWindow* self, igtlio::ConnectorPointer connector);
-
-  static void OnCommandReceivedEvent(PlusServerLauncherMainWindow* self, igtlio::LogicPointer logic);
-  static void ParseCommand(PlusServerLauncherMainWindow* self, igtlio::CommandDevicePointer);
-  static void RespondToCommand(PlusServerLauncherMainWindow* self, igtlio::CommandDevicePointer commandDevice, vtkXMLDataElement* response);
 
   /*! Stop server process, disconnect outputs. Returns with true on success (shutdown on request was successful, without forcing). */
   bool StopServer();
@@ -109,19 +107,8 @@ protected:
   /*! List of active ports for PlusServers */
   std::string                           m_Suffix;
 
-  /*! OpenIGTLink server that allows remote control of launcher (start/stop a PlusServer process, etc) */
   int m_RemoteControlServerPort;
-  vtkSmartPointer<vtkCallbackCommand>   m_RemoteControlServerCallbackCommand;
-  igtlio::LogicPointer                  m_RemoteControlServerLogic;
-  igtlio::ConnectorPointer              m_RemoteControlServerConnector;
-  igtlio::SessionPointer                m_RemoteControlServerSession;
-  vtkSmartPointer<vtkMultiThreader>     m_Threader;
-  std::vector<igtlio::ConnectorPointer> m_Connections;
-  std::pair<bool, bool> m_RemoteControlActive;
-  int m_CommandId;
-
-  PlusStatus StartRemoteControlServer();
-  static void* PlusServerLauncherMainWindow::PlusRemoteThread(vtkMultiThreader::ThreadInfo* data);
+  vtkSmartPointer<vtkPlusServerLauncherRemoteControl>  m_LauncherRemoteControl;
 
 private:
   Ui::PlusServerLauncherMainWindow ui;

@@ -5,6 +5,7 @@ PROJECT(PlusServerLauncher)
 SET(PlusServerLauncher_SRCS
   PlusServerLauncherMain.cxx
   PlusServerLauncherMainWindow.cxx
+  vtkPlusServerLauncherRemoteControl.cxx
   )
 
 IF(WIN32)
@@ -16,6 +17,7 @@ ENDIF()
 
 SET(PlusServerLauncher_UI_HDRS
   PlusServerLauncherMainWindow.h
+  vtkPlusServerLauncherRemoteControl.h
   )
 
 SET(PlusServerLauncher_UI_SRCS
