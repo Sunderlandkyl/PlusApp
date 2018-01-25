@@ -353,9 +353,12 @@ PlusStatus PlusServerLauncherMainWindow::ConnectToDevicesByConfigString(std::str
   if (STRCASECMP("", filename.c_str()) == 0)
   {
     PlusCommon::CreateTemporaryFilename(filename, vtkPlusConfig::GetInstance()->GetOutputDirectory());
+    LOG_INFO("Creating temporary file: " << filename);
   }
-  
+
   //m_DeviceSetSelectorWidget->Co
+
+  // Write contents of server config elements to file
   ofstream file;
   file.open(filename);
   file << configFileString;
@@ -363,10 +366,15 @@ PlusStatus PlusServerLauncherMainWindow::ConnectToDevicesByConfigString(std::str
 
   this->ConnectToDevicesByConfigFile(filename);
 
+  if (m_CurrentServerInstance && m_CurrentServerInstance->state() == QProcess::Running)
+  {
+    return PLUS_SUCCESS;
+  }
+
   // TODO: update UI to show the name of the config file that was passed via string
   //vtkPlusConfig::GetInstance()->SetDeviceSetConfigurationFileName(filename);
+  return PLUS_FAIL;
 
-  return PLUS_SUCCESS;
 }
 
 //-----------------------------------------------------------------------------
@@ -647,7 +655,8 @@ void PlusServerLauncherMainWindow::ParseCommand(PlusServerLauncherMainWindow* se
   std::string commandName = contentData.name;
   std::string content = contentData.content;
 
-  std::vector<vtkSmartPointer<vtkXMLDataElement>> responseDataElements;
+  vtkSmartPointer<vtkXMLDataElement> commandResponseElementRoot = vtkSmartPointer<vtkXMLDataElement>::New();
+  commandResponseElementRoot->SetName("Command");
 
   vtkSmartPointer<vtkXMLDataElement> rootElement = vtkSmartPointer<vtkXMLDataElement>::Take(vtkXMLUtilities::ReadElementFromString(content.c_str()));
   if (!rootElement)
@@ -664,15 +673,6 @@ void PlusServerLauncherMainWindow::ParseCommand(PlusServerLauncherMainWindow* se
 
     LOG_INFO("Server Start command received");
 
-    std::string configFileString = "None";
-    vtkSmartPointer<vtkXMLDataElement> configFileElement = startServerElement->FindNestedElementWithName("PlusConfiguration");
-    if (configFileElement)
-    {
-      std::stringstream configFileStream;
-      vtkXMLUtilities::FlattenElement(configFileElement, configFileStream);
-      configFileString = configFileStream.str();
-    }
-
     vtkSmartPointer<vtkXMLDataElement> logLevelElement = startServerElement->FindNestedElementWithName("LogLevel");
     if (logLevelElement)
     {
@@ -686,6 +686,9 @@ void PlusServerLauncherMainWindow::ParseCommand(PlusServerLauncherMainWindow* se
       }
     }
 
+    // Get the filename from the command. The file will be saved to the config file directory with the specified name.
+    // If the file already exists, it will be overwritten.
+    // If no name is specified, it will be created as a .tmp file in the output directory.
     std::string fileNameAndPath = "";
     vtkSmartPointer<vtkXMLDataElement> fileElement = startServerElement->FindNestedElementWithName("File");
     if (fileElement)
@@ -695,16 +698,54 @@ void PlusServerLauncherMainWindow::ParseCommand(PlusServerLauncherMainWindow* se
       {
         std::string path = vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationDirectory();
         fileNameAndPath = path + "/" + name;
-        LOG_WARNING(fileNameAndPath);
+        LOG_TRACE("Writing config file to: " << name);
       }
-      
     }
 
-    if (STRCASECMP(configFileString.c_str(), "None") == 0)
+    // Contents of the config file. Identified by root element "PlusConfiguration"
+    std::string configFileContents = "None";
+    vtkSmartPointer<vtkXMLDataElement> configFileElement = startServerElement->FindNestedElementWithName("PlusConfiguration");
+    if (configFileElement)
     {
-      // TODO: what to do if user doesn't specify config file?
-      // Activate with currently selected config file?
-      LOG_WARNING(self->m_DeviceSetSelectorWidget->windowFilePath().toStdString());
+      std::stringstream configFileContentsStream;
+      vtkXMLUtilities::FlattenElement(configFileElement, configFileContentsStream);
+      configFileContents = configFileContentsStream.str();
+    }
+
+    if (STRCASECMP(configFileContents.c_str(), "None") == 0)
+    {
+      LOG_TRACE("No config file contents found!");
+      if (STRCASECMP(fileNameAndPath.c_str(), "") != 0)
+      {
+        // Attempt to connect to the server, the connection process will block this thread
+        LOG_TRACE("Attempting to start server using: " << fileNameAndPath);
+        PlusStatus serverStartSuccess = PLUS_FAIL;
+        QMetaObject::invokeMethod(self,
+          "ConnectToDevicesByConfigFile",
+          Qt::BlockingQueuedConnection,
+          Q_ARG(std::string, fileNameAndPath));
+      }
+      else
+      {
+        // TODO: what to do if user doesn't specify config file?
+        // Activate with currently selected config file?
+        LOG_TRACE("No config file name found!");
+        LOG_TRACE("Attempting to connect using the currently selected config file.");
+        QMetaObject::invokeMethod(self->m_DeviceSetSelectorWidget,
+          "InvokeConnect",
+          Qt::BlockingQueuedConnection);
+      }
+
+      std::string serverStarted = "false";
+      if (self->m_CurrentServerInstance && self->m_CurrentServerInstance->state() == QProcess::Running)
+      {
+        serverStarted = "true";
+      }
+
+      vtkSmartPointer<vtkXMLDataElement> startServerResponse = vtkSmartPointer<vtkXMLDataElement>::New();
+      startServerResponse->SetName("StartServer");
+      startServerResponse->SetAttribute("Success", serverStarted.c_str());
+      commandResponseElementRoot->AddNestedElement(startServerResponse);
     }
     else
     {
@@ -714,28 +755,35 @@ void PlusServerLauncherMainWindow::ParseCommand(PlusServerLauncherMainWindow* se
         "ConnectToDevicesByConfigString",
         Qt::BlockingQueuedConnection,
         Q_RETURN_ARG(PlusStatus, serverStartSuccess),
-        Q_ARG(std::string, configFileString));
+        Q_ARG(std::string, configFileContents),
+        Q_ARG(std::string, fileNameAndPath));
 
       vtkSmartPointer<vtkXMLDataElement> startServerResponse = vtkSmartPointer<vtkXMLDataElement>::New();
       startServerResponse->SetName("StartServer");
       startServerResponse->SetAttribute("Success", serverStartSuccess ? "true" : "false");
-      responseDataElements.push_back(startServerResponse);
+      commandResponseElementRoot->AddNestedElement(startServerResponse);
     }
   }
   else if (stopServerElement)
   {
     //TODO: Any info to read for stop command?
     LOG_INFO("Server stop command received");
+
     bool serverStopSuccess = PLUS_FAIL;
     QMetaObject::invokeMethod(self->m_DeviceSetSelectorWidget,
       "InvokeDisconnect",
       Qt::BlockingQueuedConnection);
 
+    std::string serverStopped = "true";
+    if (self->m_CurrentServerInstance && self->m_CurrentServerInstance->state() == QProcess::Running)
+    {
+      serverStopped = "false";
+    }
+
     vtkSmartPointer<vtkXMLDataElement> stopServerResponse = vtkSmartPointer<vtkXMLDataElement>::New();
     stopServerResponse->SetName("StopServer");
-    //stopServerResponse->SetAttribute("Success", serverStopSuccess ? "true" : "false"); //TODO: currently no measure of success for if server stops
-    stopServerResponse->SetAttribute("Success", "true");
-    responseDataElements.push_back(stopServerResponse);
+    stopServerResponse->SetAttribute("Success", serverStopped.c_str());
+    commandResponseElementRoot->AddNestedElement(stopServerResponse);
   }
 
   // Look for all of the "Get" statements
@@ -747,6 +795,8 @@ void PlusServerLauncherMainWindow::ParseCommand(PlusServerLauncherMainWindow* se
       const char* parameterName = nestedElement->GetAttribute("Name");
       if (parameterName)
       {
+        LOG_TRACE("Command received: Get(" << parameterName << ")");
+
         vtkSmartPointer<vtkXMLDataElement> getResponseElement = vtkSmartPointer<vtkXMLDataElement>::New();
         if (STRCASECMP(parameterName, "Status") == 0)
         {
@@ -763,17 +813,11 @@ void PlusServerLauncherMainWindow::ParseCommand(PlusServerLauncherMainWindow* se
           // Not a recognized parameter, move to the next "Get" element
           continue;
         }
-        responseDataElements.push_back(getResponseElement);
+        commandResponseElementRoot->AddNestedElement(getResponseElement);
       }
     }
   }
 
-  vtkSmartPointer<vtkXMLDataElement> commandResponseElementRoot = vtkSmartPointer<vtkXMLDataElement>::New();
-  commandResponseElementRoot->SetName("Command");
-  for (std::vector<vtkSmartPointer<vtkXMLDataElement>>::iterator it = responseDataElements.begin(); it != responseDataElements.end(); ++it)
-  {
-    commandResponseElementRoot->AddNestedElement(*it);
-  }
   PlusServerLauncherMainWindow::RespondToCommand(self, commandDevice, commandResponseElementRoot);
 
 }
