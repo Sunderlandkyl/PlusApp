@@ -535,5 +535,12 @@ void PlusServerLauncherMainWindow::SetLogLevel(int logLevel)
 //----------------------------------------------------------------------------
 int PlusServerLauncherMainWindow::GetServerStatus()
 {
-  return this->m_CurrentServerInstance->state();
+  if (m_CurrentServerInstance)
+  {
+    return m_CurrentServerInstance->state();
+  }
+  else
+  {
+    return false;
+  }
 }

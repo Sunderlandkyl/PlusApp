@@ -29,6 +29,7 @@ public:
 
   PlusStatus StartRemoteControlServer();
   PlusStatus StopRemoteControlServer();
+  void CreateNewConnector();
 
   void SendServerShutdownSignal();
 
@@ -45,10 +46,11 @@ protected:
   static void RespondToCommand(vtkPlusServerLauncherRemoteControl* self, igtlio::CommandDevicePointer commandDevice, vtkXMLDataElement* response);
   static void OnRemoteControlServerEventReceived(vtkObject* caller, unsigned long eventId, void* clientdata, void* calldata);
   static void OnConnectEvent(vtkPlusServerLauncherRemoteControl* self, igtlio::ConnectorPointer connector);
+  static void OnDisconnectEvent(vtkPlusServerLauncherRemoteControl* self, igtlio::ConnectorPointer connector);
 
   static void* PlusRemoteThread(vtkMultiThreader::ThreadInfo* data);
 
-  int ServerPort = PlusServerLauncherMainWindow::DEFAULT_REMOTE_CONTROL_SERVER_PORT;
+  std::string GetCommandName();
 
 public:
   vtkGetMacro(ServerPort, int);
@@ -63,18 +65,20 @@ protected:
 
   //TODO: rename all qt variables
   /*! OpenIGTLink server that allows remote control of launcher (start/stop a PlusServer process, etc) */
-  vtkSmartPointer<vtkCallbackCommand>   RemoteControlServerCommandCallback;
-  vtkSmartPointer<vtkCallbackCommand>   RemoteControlServerConnectCallback;
+  vtkSmartPointer<vtkCallbackCommand>   RemoteControlServerCallbackCommand;
   igtlio::LogicPointer                  RemoteControlServerLogic;
   igtlio::ConnectorPointer              RemoteControlServerConnector;
   igtlio::SessionPointer                RemoteControlServerSession;
 
   vtkSmartPointer<vtkMultiThreader>     Threader;
   std::vector<igtlio::ConnectorPointer> Connections;
+  std::vector<igtlio::SessionPointer> Sessions;
+  std::vector<igtlio::LogicPointer> Logics;
 
   std::pair<bool, bool> RemoteControlActive;
   int CommandId;
 
+  int ServerPort = PlusServerLauncherMainWindow::DEFAULT_REMOTE_CONTROL_SERVER_PORT;
 
 private:
   vtkPlusServerLauncherRemoteControl(const vtkPlusServerLauncherRemoteControl&);

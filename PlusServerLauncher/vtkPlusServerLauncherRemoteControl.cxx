@@ -4,6 +4,7 @@
 #include <vtkObjectFactory.h>
 
 #include <QPlusDeviceSetSelectorWidget.h>
+#include <vtkPlusLogger.h>
 
 vtkStandardNewMacro(vtkPlusServerLauncherRemoteControl);
 
@@ -16,8 +17,7 @@ vtkPlusServerLauncherRemoteControl::~vtkPlusServerLauncherRemoteControl()
 {
   if (this->RemoteControlServerLogic)
   {
-    this->RemoteControlServerLogic->RemoveObserver(this->RemoteControlServerConnectCallback);
-    this->RemoteControlServerLogic->RemoveObserver(this->RemoteControlServerCommandCallback);
+    this->RemoteControlServerLogic->RemoveObserver(this->RemoteControlServerCallbackCommand);
   }
 
   // Wait for remote control thread to terminate
@@ -32,24 +32,20 @@ vtkPlusServerLauncherRemoteControl::~vtkPlusServerLauncherRemoteControl()
 //---------------------------------------------------------------------------
 PlusStatus vtkPlusServerLauncherRemoteControl::StartRemoteControlServer()
 {
-
   LOG_INFO("Start remote control server at port: " << this->ServerPort);
+
+  this->RemoteControlServerCallbackCommand = vtkSmartPointer<vtkCallbackCommand>::New();
+  this->RemoteControlServerCallbackCommand->SetCallback(vtkPlusServerLauncherRemoteControl::OnRemoteControlServerEventReceived);
+  this->RemoteControlServerCallbackCommand->SetClientData(this);
+
   this->RemoteControlServerLogic = igtlio::LogicPointer::New();
   this->RemoteControlServerSession = this->RemoteControlServerLogic->StartServer(this->ServerPort);
   this->RemoteControlServerConnector = this->RemoteControlServerSession->GetConnector();
 
-  this->RemoteControlServerConnectCallback = vtkSmartPointer<vtkCallbackCommand>::New();
-  this->RemoteControlServerConnectCallback->SetCallback(vtkPlusServerLauncherRemoteControl::OnRemoteControlServerEventReceived);
-  this->RemoteControlServerConnectCallback->SetClientData(this);
-  this->RemoteControlServerConnector->AddObserver(igtlio::Connector::ConnectedEvent, this->RemoteControlServerConnectCallback);
-  this->RemoteControlServerConnector->AddObserver(igtlio::Connector::DisconnectedEvent, this->RemoteControlServerConnectCallback);
-
-  this->RemoteControlServerCommandCallback = vtkSmartPointer<vtkCallbackCommand>::New();
-  this->RemoteControlServerCommandCallback->SetCallback(vtkPlusServerLauncherRemoteControl::OnRemoteControlServerEventReceived);
-  this->RemoteControlServerCommandCallback->SetClientData(this);
-  this->RemoteControlServerLogic->AddObserver(igtlio::Logic::CommandReceivedEvent, this->RemoteControlServerCommandCallback);
-  this->RemoteControlServerLogic->AddObserver(igtlio::Logic::CommandResponseReceivedEvent, this->RemoteControlServerCommandCallback);
-
+  this->RemoteControlServerLogic->AddObserver(igtlio::Logic::CommandReceivedEvent, this->RemoteControlServerCallbackCommand);
+  this->RemoteControlServerLogic->AddObserver(igtlio::Logic::CommandResponseReceivedEvent, this->RemoteControlServerCallbackCommand);
+  this->RemoteControlServerConnector->AddObserver(igtlio::Connector::ConnectedEvent, this->RemoteControlServerCallbackCommand);
+  this->RemoteControlServerConnector->AddObserver(igtlio::Connector::DisconnectedEvent, this->RemoteControlServerCallbackCommand);
 
   // Create thread to receive commands
   this->Threader = vtkSmartPointer<vtkMultiThreader>::New();
@@ -72,11 +68,46 @@ void* vtkPlusServerLauncherRemoteControl::PlusRemoteThread(vtkMultiThreader::Thr
   vtkPlusServerLauncherRemoteControl* self = (vtkPlusServerLauncherRemoteControl*)(data->UserData);
   LOG_INFO("Remote control started");
 
+  std::ifstream logFileStream(vtkPlusLogger::Instance()->GetLogFileName());
+  bool isOpen = logFileStream.is_open();
+  std::string line;
+
   self->RemoteControlActive.second = true;
   while (self->RemoteControlActive.first)
   {
     self->RemoteControlServerLogic->PeriodicProcess();
     vtkPlusAccurateTimer::DelayWithEventProcessing(0.2);
+    bool logUpdated = false;
+    std::stringstream logString;
+    while (std::getline(logFileStream, line))
+    {
+      if (STRCASECMP(line.c_str(), "") != 0)
+      {
+        logString << line << "###NEWLINE###";
+        logUpdated = true;
+      }
+    }
+    if(logFileStream.eof())
+      logFileStream.clear();
+
+    if (logUpdated)
+    {
+      vtkSmartPointer<vtkXMLDataElement> commandElement = vtkSmartPointer<vtkXMLDataElement>::New();
+      commandElement->SetName("Command");
+      vtkSmartPointer<vtkXMLDataElement> messageElement = vtkSmartPointer<vtkXMLDataElement>::New();
+      messageElement->SetName("Message");
+      messageElement->SetAttribute("Text", logString.str().c_str());
+      commandElement->AddNestedElement(messageElement);
+
+      std::stringstream messageCommand;
+      vtkXMLUtilities::FlattenElement(commandElement, messageCommand);
+      
+      std::stringstream ss;
+      commandElement->Print(ss);
+      //LOG_ERROR(ss.str());
+
+      self->RemoteControlServerSession->SendCommand("LOG", "LOG", messageCommand.str());
+    }
   }
   self->RemoteControlActive.second = false;
   LOG_INFO("Remote control stopped");
@@ -112,6 +143,11 @@ void vtkPlusServerLauncherRemoteControl::OnRemoteControlServerEventReceived(vtkO
 
 //---------------------------------------------------------------------------
 void vtkPlusServerLauncherRemoteControl::OnConnectEvent(vtkPlusServerLauncherRemoteControl* self, igtlio::ConnectorPointer connector)
+{
+}
+
+//---------------------------------------------------------------------------
+void vtkPlusServerLauncherRemoteControl::OnDisconnectEvent(vtkPlusServerLauncherRemoteControl* self, igtlio::ConnectorPointer connector)
 {
 }
 
@@ -242,11 +278,10 @@ void vtkPlusServerLauncherRemoteControl::StartServerCommand(vtkPlusServerLaunche
     }
 
     std::string serverStarted = "false";
-    //if (self->CurrentServerInstance && self->CurrentServerInstance->state() == QProcess::Running)
-    //{
-    //  serverStarted = "true";
-    //}
-    serverStarted = "true";
+    if (self->MainWindow->GetServerStatus() == QProcess::Running)
+    {
+      serverStarted = "true";
+    }
 
     vtkSmartPointer<vtkXMLDataElement> startServerResponse = vtkSmartPointer<vtkXMLDataElement>::New();
     startServerResponse->SetName("StartServer");
@@ -283,10 +318,10 @@ void vtkPlusServerLauncherRemoteControl::StopServerCommand(vtkPlusServerLauncher
     Qt::BlockingQueuedConnection);
 
   std::string serverStopped = "true";
-  //if (self->CurrentServerInstance && self->CurrentServerInstance->state() == QProcess::Running)
-  //{
-  //  serverStopped = "false";
-  //}
+  if (self->MainWindow->GetServerStatus() == QProcess::Running)
+  {
+    serverStopped = "false";
+  }
 
   vtkSmartPointer<vtkXMLDataElement> stopServerResponse = vtkSmartPointer<vtkXMLDataElement>::New();
   stopServerResponse->SetName("StopServer");
@@ -312,11 +347,10 @@ void vtkPlusServerLauncherRemoteControl::GetCommand(vtkPlusServerLauncherRemoteC
         if (STRCASECMP(parameterName, "Status") == 0)
         {
           const char* status = "Off";
-          //if (self->MainWindow->GetServerStatus())
-          //{
-          //  status = (self->CurrentServerInstance->state() == QProcess::Running) ? "Running" : "Off";
-          //}
-          status = "Running";
+          if (self->MainWindow->GetServerStatus() == QProcess::Running)
+          {
+            status = "On";
+          }
           getResponseElement->SetName(nestedElement->GetName());
           getResponseElement->SetAttribute("Status", status);
         }
@@ -346,6 +380,16 @@ void vtkPlusServerLauncherRemoteControl::RespondToCommand(vtkPlusServerLauncherR
 void vtkPlusServerLauncherRemoteControl::SendServerShutdownSignal()
 {
   LOG_TRACE("Server shutdown signal");
+  this->RemoteControlServerSession->SendCommand(this->GetCommandName(), "Test", "<Command><Name test=\"TRUE\"/></Command>");
+}
+
+//----------------------------------------------------------------------------
+std::string vtkPlusServerLauncherRemoteControl::GetCommandName()
+{
+  std::stringstream nameStream;
+  nameStream << "CMD_";
+  nameStream << this->CommandId;
+  return nameStream.str();
 }
 
 //----------------------------------------------------------------------------
