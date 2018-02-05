@@ -158,7 +158,7 @@ PlusServerLauncherMainWindow::PlusServerLauncherMainWindow(QWidget* parent /*=0*
     m_LauncherRemoteControl->SetServerPort(m_RemoteControlServerPort);
     m_LauncherRemoteControl->SetMainWindow(this);
     m_LauncherRemoteControl->SetDeviceSetSelectorWidget(m_DeviceSetSelectorWidget);
-    if (!m_LauncherRemoteControl->StartRemoteControlServer())
+    if (!m_LauncherRemoteControl || !m_LauncherRemoteControl->StartRemoteControlServer())
     {
       LOG_ERROR("Remote control server could not be started!")
     }
@@ -210,6 +210,11 @@ bool PlusServerLauncherMainWindow::StartServer(const QString& configFilePath)
   {
     LOG_INFO("Server process started successfully");
     ui.comboBox_LogLevel->setEnabled(false);
+
+    if (m_LauncherRemoteControl)
+    {
+      m_LauncherRemoteControl->SendServerStartupSignal();
+    }
     return true;
   }
   else
@@ -331,34 +336,25 @@ void PlusServerLauncherMainWindow::ConnectToDevicesByConfigFile(std::string aCon
 }
 
 //---------------------------------------------------------------------------
-PlusStatus PlusServerLauncherMainWindow::ConnectToDevicesByConfigString(std::string configFileString, std::string filename)
+void PlusServerLauncherMainWindow::ConnectToDevicesByConfigString(std::string aConfigFileString, std::string aFilename)
 {
-  //std::string filename;
-
-  if (STRCASECMP("", filename.c_str()) == 0)
+  if (STRCASECMP("", aFilename.c_str()) == 0)
   {
-    PlusCommon::CreateTemporaryFilename(filename, vtkPlusConfig::GetInstance()->GetOutputDirectory());
-    LOG_INFO("Creating temporary file: " << filename);
+    PlusCommon::CreateTemporaryFilename(aFilename, vtkPlusConfig::GetInstance()->GetOutputDirectory());
+    LOG_INFO("Creating temporary file: " << aFilename);
   }
-
-  //m_DeviceSetSelectorWidget->Co
 
   // Write contents of server config elements to file
   ofstream file;
-  file.open(filename);
-  file << configFileString;
+  file.open(aFilename);
+  file << aConfigFileString;
   file.close();
 
-  this->ConnectToDevicesByConfigFile(filename);
-
-  if (m_CurrentServerInstance && m_CurrentServerInstance->state() == QProcess::Running)
-  {
-    return PLUS_SUCCESS;
-  }
-
   // TODO: update UI to show the name of the config file that was passed via string
-  //vtkPlusConfig::GetInstance()->SetDeviceSetConfigurationFileName(filename);
-  return PLUS_FAIL;
+  vtkPlusConfig::GetInstance()->SetDeviceSetConfigurationFileName(aFilename);
+
+  this->ConnectToDevicesByConfigFile(aFilename);
+
 
 }
 
@@ -530,6 +526,11 @@ void PlusServerLauncherMainWindow::LogLevelChanged()
 void PlusServerLauncherMainWindow::SetLogLevel(int logLevel)
 {
   this->ui.comboBox_LogLevel->setCurrentIndex(this->ui.comboBox_LogLevel->findData(QVariant(logLevel)));
+}
+
+int PlusServerLauncherMainWindow::GetLogLevel()
+{
+  return this->ui.comboBox_LogLevel->currentData().Int;
 }
 
 //----------------------------------------------------------------------------

@@ -31,6 +31,7 @@ public:
   PlusStatus StopRemoteControlServer();
   void CreateNewConnector();
 
+  void SendServerStartupSignal();
   void SendServerShutdownSignal();
 
 protected:

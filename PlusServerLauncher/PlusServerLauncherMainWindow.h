@@ -63,9 +63,10 @@ public slots:
   void ConnectToDevicesByConfigFile(std::string);
 
   /*! Connect to devices described in the configuration contained within the string */
-  PlusStatus ConnectToDevicesByConfigString(std::string configFileString, std::string filename = "");
+  void ConnectToDevicesByConfigString(std::string configFileString, std::string filename = "");
 
   void SetLogLevel(int logLevel);
+  int GetLogLevel();
 
   int GetServerStatus();
 
