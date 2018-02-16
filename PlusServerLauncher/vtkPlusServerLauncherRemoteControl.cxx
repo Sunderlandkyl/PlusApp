@@ -206,6 +206,12 @@ void vtkPlusServerLauncherRemoteControl::ParseCommand(vtkPlusServerLauncherRemot
 
   self->GetCommand(self, rootElement, commandResponseElementRoot);
 
+  // No recognized command. Nothing to reply to.
+  if (commandResponseElementRoot->GetNumberOfNestedElements() == 0)
+  {
+    return;
+  }
+
   vtkPlusServerLauncherRemoteControl::RespondToCommand(self, commandDevice, commandResponseElementRoot);
 }
 
@@ -418,8 +424,9 @@ void vtkPlusServerLauncherRemoteControl::SendServerShutdownSignal()
 std::string vtkPlusServerLauncherRemoteControl::GetCommandName()
 {
   std::stringstream nameStream;
-  nameStream << "CMD_";
-  nameStream << this->CommandId;
+  //nameStream << "CMD_";
+  //nameStream << this->CommandId;
+  nameStream << "RemoteControl";
   return nameStream.str();
 }
 
