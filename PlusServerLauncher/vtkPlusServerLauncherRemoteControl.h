@@ -38,16 +38,18 @@ protected:
   vtkPlusServerLauncherRemoteControl();
   virtual ~vtkPlusServerLauncherRemoteControl();
 
-  void StartServerCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* startServerElement, vtkXMLDataElement* commandResponseElementRoot);
-  void StopServerCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* startServerElement, vtkXMLDataElement* commandResponseElementRoot);
+  void StartServerCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* startServerCommandElement, igtlio::CommandDevicePointer commandDevice);
+  void StopServerCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* stopServerCommandElement, igtlio::CommandDevicePointer commandDevice);
+  void GetServerInfoCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* getServerInfoCommandElement, igtlio::CommandDevicePointer commandDevice);
   void GetCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* startServerElement, vtkXMLDataElement* rootElement);
+  std::string GetOutgoingPortsFromConfigFile(vtkXMLDataElement* configFileElement);
 
   static void OnCommandReceivedEvent(vtkPlusServerLauncherRemoteControl* self, igtlio::LogicPointer logic);
-  static void ParseCommand(vtkPlusServerLauncherRemoteControl* self, igtlio::CommandDevicePointer);
   static void RespondToCommand(vtkPlusServerLauncherRemoteControl* self, igtlio::CommandDevicePointer commandDevice, vtkXMLDataElement* response);
   static void OnRemoteControlServerEventReceived(vtkObject* caller, unsigned long eventId, void* clientdata, void* calldata);
   static void OnConnectEvent(vtkPlusServerLauncherRemoteControl* self, igtlio::ConnectorPointer connector);
   static void OnDisconnectEvent(vtkPlusServerLauncherRemoteControl* self, igtlio::ConnectorPointer connector);
+  static void OnLogEvent(vtkObject* caller, unsigned long eventId, void* clientData, void* callData);
 
   static void* PlusRemoteThread(vtkMultiThreader::ThreadInfo* data);
 
@@ -70,6 +72,7 @@ protected:
   igtlio::LogicPointer                  RemoteControlServerLogic;
   igtlio::ConnectorPointer              RemoteControlServerConnector;
   igtlio::SessionPointer                RemoteControlServerSession;
+  vtkSmartPointer<vtkCallbackCommand>   LogMessageCallbackCommand;
 
   vtkSmartPointer<vtkMultiThreader>     Threader;
   std::vector<igtlio::ConnectorPointer> Connections;

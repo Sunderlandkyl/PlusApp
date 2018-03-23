@@ -351,10 +351,7 @@ void PlusServerLauncherMainWindow::ConnectToDevicesByConfigString(std::string aC
   file.close();
 
   // TODO: update UI to show the name of the config file that was passed via string
-  vtkPlusConfig::GetInstance()->SetDeviceSetConfigurationFileName(aFilename);
-
   this->ConnectToDevicesByConfigFile(aFilename);
-
 
 }
 

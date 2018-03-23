@@ -20,6 +20,11 @@ vtkPlusServerLauncherRemoteControl::~vtkPlusServerLauncherRemoteControl()
     this->RemoteControlServerLogic->RemoveObserver(this->RemoteControlServerCallbackCommand);
   }
 
+  if (vtkPlusLogger::Instance())
+  {
+    vtkPlusLogger::Instance()->RemoveObserver(this->LogMessageCallbackCommand);
+  }
+
   // Wait for remote control thread to terminate
   this->RemoteControlActive.first = false;
   while (this->RemoteControlActive.second)
@@ -27,7 +32,6 @@ vtkPlusServerLauncherRemoteControl::~vtkPlusServerLauncherRemoteControl()
     vtkPlusAccurateTimer::DelayWithEventProcessing(0.2);
   }
 }
-
 
 //---------------------------------------------------------------------------
 PlusStatus vtkPlusServerLauncherRemoteControl::StartRemoteControlServer()
@@ -38,14 +42,19 @@ PlusStatus vtkPlusServerLauncherRemoteControl::StartRemoteControlServer()
   this->RemoteControlServerCallbackCommand->SetCallback(vtkPlusServerLauncherRemoteControl::OnRemoteControlServerEventReceived);
   this->RemoteControlServerCallbackCommand->SetClientData(this);
 
+  this->LogMessageCallbackCommand = vtkSmartPointer<vtkCallbackCommand>::New();
+  this->LogMessageCallbackCommand->SetCallback(vtkPlusServerLauncherRemoteControl::OnLogEvent);
+  this->LogMessageCallbackCommand->SetClientData(this);
+
   this->RemoteControlServerLogic = igtlio::LogicPointer::New();
   this->RemoteControlServerSession = this->RemoteControlServerLogic->StartServer(this->ServerPort);
-  //this->RemoteControlServerConnector = this->RemoteControlServerSession->GetConnector();
+  this->RemoteControlServerConnector = this->RemoteControlServerSession->GetConnector();
 
   this->RemoteControlServerLogic->AddObserver(igtlio::Logic::CommandReceivedEvent, this->RemoteControlServerCallbackCommand);
   this->RemoteControlServerLogic->AddObserver(igtlio::Logic::CommandResponseReceivedEvent, this->RemoteControlServerCallbackCommand);
-  this->RemoteControlServerLogic->AddObserver(igtlio::Connector::ConnectedEvent, this->RemoteControlServerCallbackCommand);
-  this->RemoteControlServerLogic->AddObserver(igtlio::Connector::DisconnectedEvent, this->RemoteControlServerCallbackCommand);
+  this->RemoteControlServerConnector->AddObserver(igtlio::Connector::ConnectedEvent, this->RemoteControlServerCallbackCommand);
+  this->RemoteControlServerConnector->AddObserver(igtlio::Connector::DisconnectedEvent, this->RemoteControlServerCallbackCommand);
+  vtkPlusLogger::Instance()->AddObserver(vtkCommand::UserEvent, this->LogMessageCallbackCommand);
 
   // Create thread to receive commands
   this->Threader = vtkSmartPointer<vtkMultiThreader>::New();
@@ -56,11 +65,6 @@ PlusStatus vtkPlusServerLauncherRemoteControl::StartRemoteControlServer()
   return PLUS_SUCCESS;
 }
 
-//---------------------------------------------------------------------------
-PlusStatus vtkPlusServerLauncherRemoteControl::StopRemoteControlServer()
-{
-  return PLUS_SUCCESS;
-}
 
 //---------------------------------------------------------------------------
 void* vtkPlusServerLauncherRemoteControl::PlusRemoteThread(vtkMultiThreader::ThreadInfo* data)
@@ -68,49 +72,22 @@ void* vtkPlusServerLauncherRemoteControl::PlusRemoteThread(vtkMultiThreader::Thr
   vtkPlusServerLauncherRemoteControl* self = (vtkPlusServerLauncherRemoteControl*)(data->UserData);
   LOG_INFO("Remote control started");
 
-  std::ifstream logFileStream(vtkPlusLogger::Instance()->GetLogFileName());
-  bool isOpen = logFileStream.is_open();
-  std::string line;
-
   self->RemoteControlActive.second = true;
   while (self->RemoteControlActive.first)
   {
     self->RemoteControlServerLogic->PeriodicProcess();
     vtkPlusAccurateTimer::DelayWithEventProcessing(0.2);
-    bool logUpdated = false;
-    std::stringstream logString;
-    while (std::getline(logFileStream, line))
-    {
-      if (STRCASECMP(line.c_str(), "") != 0)
-      {
-        logString << line << "###NEWLINE###";
-        logUpdated = true;
-      }
-    }
-    if(logFileStream.eof())
-      logFileStream.clear();
-
-    if (logUpdated)
-    {
-      vtkSmartPointer<vtkXMLDataElement> commandElement = vtkSmartPointer<vtkXMLDataElement>::New();
-      commandElement->SetName("Command");
-      vtkSmartPointer<vtkXMLDataElement> messageElement = vtkSmartPointer<vtkXMLDataElement>::New();
-      messageElement->SetName("Message");
-      messageElement->SetAttribute("Text", logString.str().c_str());
-      commandElement->AddNestedElement(messageElement);
-
-      std::stringstream messageCommand;
-      vtkXMLUtilities::FlattenElement(commandElement, messageCommand);
-      
-      std::stringstream ss;
-      commandElement->Print(ss);
-      self->RemoteControlServerSession->SendCommand("LOG", "LOG", messageCommand.str(), igtlio::ASYNCHRONOUS);
-    }
   }
   self->RemoteControlActive.second = false;
   LOG_INFO("Remote control stopped");
 
   return NULL;
+}
+
+//---------------------------------------------------------------------------
+PlusStatus vtkPlusServerLauncherRemoteControl::StopRemoteControlServer()
+{
+  return PLUS_SUCCESS;
 }
 
 //---------------------------------------------------------------------------
@@ -127,6 +104,7 @@ void vtkPlusServerLauncherRemoteControl::OnRemoteControlServerEventReceived(vtkO
     vtkPlusServerLauncherRemoteControl::OnConnectEvent(self, connector);
     break;
   case igtlio::Connector::DisconnectedEvent:
+    vtkPlusServerLauncherRemoteControl::OnDisconnectEvent(self, connector);
     break;
   case igtlio::Logic::CommandReceivedEvent:
     vtkPlusServerLauncherRemoteControl::OnCommandReceivedEvent(self, logic);
@@ -137,6 +115,25 @@ void vtkPlusServerLauncherRemoteControl::OnRemoteControlServerEventReceived(vtkO
     break;
   }
 
+}
+
+//---------------------------------------------------------------------------
+void vtkPlusServerLauncherRemoteControl::OnLogEvent(vtkObject* caller, unsigned long eventId, void* clientData, void* callData)
+{
+  vtkPlusServerLauncherRemoteControl* self = reinterpret_cast<vtkPlusServerLauncherRemoteControl*>(clientData);
+  const char* logMessage = static_cast<char*>(callData);
+
+  vtkSmartPointer<vtkXMLDataElement> commandElement = vtkSmartPointer<vtkXMLDataElement>::New();
+  commandElement->SetName("Command");
+
+  vtkSmartPointer<vtkXMLDataElement> messageElement = vtkSmartPointer<vtkXMLDataElement>::New();
+  messageElement->SetName("LogMessage");
+  messageElement->SetAttribute("Text", logMessage);
+  commandElement->AddNestedElement(messageElement);
+
+  std::stringstream messageCommand;
+  vtkXMLUtilities::FlattenElement(commandElement, messageCommand);
+  self->RemoteControlServerSession->SendCommand("PlusServerLauncherRemote", "LogMessage", messageCommand.str(), igtlio::ASYNCHRONOUS);
 }
 
 //---------------------------------------------------------------------------
@@ -167,156 +164,166 @@ void vtkPlusServerLauncherRemoteControl::OnCommandReceivedEvent(vtkPlusServerLau
       igtlio::CommandDevicePointer commandDevice = igtlio::CommandDevice::SafeDownCast(device);
       if (commandDevice && commandDevice->MessageDirectionIsIn())
       {
-        vtkPlusServerLauncherRemoteControl::ParseCommand(self, commandDevice);
+        igtlio::CommandConverter::ContentData contentData = commandDevice->GetContent();
+        std::string commandNameString = contentData.name;
+        const char* commandName = commandNameString.c_str();
+        std::string content = contentData.content;
+
+        vtkSmartPointer<vtkXMLDataElement> rootElement = vtkSmartPointer<vtkXMLDataElement>::Take(vtkXMLUtilities::ReadElementFromString(content.c_str()));
+        if (!rootElement)
+        {
+          LOG_ERROR("ParseCommand: Error parsing xml");
+          continue;
+        }
+
+        
+        if (STRCASECMP(commandName, "StartServer") == 0)
+        {
+          self->StartServerCommand(self, rootElement, commandDevice);
+        }
+        else if (STRCASECMP(commandName, "StopServer") == 0)
+        {
+          self->StopServerCommand(self, rootElement, commandDevice);
+        }
+        else if (STRCASECMP(commandName, "GetServerInfo") == 0)
+        {
+          self->GetServerInfoCommand(self, rootElement, commandDevice);
+        }
       }
-      logic->RemoveDevice(i);
     }
   }
 }
 
 //---------------------------------------------------------------------------
-void vtkPlusServerLauncherRemoteControl::ParseCommand(vtkPlusServerLauncherRemoteControl* self, igtlio::CommandDevicePointer commandDevice)
+void vtkPlusServerLauncherRemoteControl::StartServerCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* startServerCommandElement, igtlio::CommandDevicePointer commandDevice)
 {
-  igtlio::CommandConverter::ContentData contentData = commandDevice->GetContent();
-  int id = contentData.id;
-  std::string commandName = contentData.name;
-  std::string content = contentData.content;
+  LOG_DEBUG("Server Start command received");
+  
+  vtkSmartPointer<vtkXMLDataElement> startServerResponseElement = vtkSmartPointer<vtkXMLDataElement>::New();
+  startServerResponseElement->SetName("Command");
+  
+  vtkSmartPointer<vtkXMLDataElement> plusConfigurationResponseElement = vtkSmartPointer<vtkXMLDataElement>::New();
+  plusConfigurationResponseElement->SetName("PlusConfiguration");
+  startServerResponseElement->AddNestedElement(plusConfigurationResponseElement);
 
-  vtkSmartPointer<vtkXMLDataElement> commandResponseElementRoot = vtkSmartPointer<vtkXMLDataElement>::New();
-  commandResponseElementRoot->SetName("Command");
-
-  vtkSmartPointer<vtkXMLDataElement> rootElement = vtkSmartPointer<vtkXMLDataElement>::Take(vtkXMLUtilities::ReadElementFromString(content.c_str()));
-  if (!rootElement)
+  std::string configFileContents = "";
+  vtkSmartPointer<vtkXMLDataElement> configFileElement = startServerCommandElement->FindNestedElementWithName("PlusConfiguration");
+  if (!configFileElement)
   {
-    LOG_ERROR("ParseCommand: Error parsing xml");
+    LOG_ERROR("No \"PlusConfiguration\" elements found!");
+    plusConfigurationResponseElement->SetAttribute("Success", "false");
+    vtkPlusServerLauncherRemoteControl::RespondToCommand(self, commandDevice, startServerResponseElement);
     return;
   }
-
-  //TODO: Command names should be stored in a variable somewhere else
-  vtkSmartPointer<vtkXMLDataElement> startServerElement = rootElement->FindNestedElementWithName("StartServer");
-  vtkSmartPointer<vtkXMLDataElement> stopServerElement = rootElement->FindNestedElementWithName("StopServer");
-  if (startServerElement)
-  {
-    self->StartServerCommand(self, startServerElement, commandResponseElementRoot);
-  }
-  else if (stopServerElement)
-  {
-    self->StopServerCommand(self, stopServerElement, commandResponseElementRoot);
-  }
-
-  self->GetCommand(self, rootElement, commandResponseElementRoot);
-
-  // No recognized command. Nothing to reply to.
-  if (commandResponseElementRoot->GetNumberOfNestedElements() == 0)
-  {
-    return;
-  }
-
-  vtkPlusServerLauncherRemoteControl::RespondToCommand(self, commandDevice, commandResponseElementRoot);
-}
-
-//---------------------------------------------------------------------------
-void vtkPlusServerLauncherRemoteControl::StartServerCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* startServerElement, vtkXMLDataElement* commandResponseElementRoot)
-{
-  LOG_INFO("Server Start command received");
-
-  int logLevel = 0;
-  if (startServerElement->GetScalarAttribute("LogLevel", logLevel))
-  {
-    QMetaObject::invokeMethod(self->MainWindow,
-      "SetLogLevel",
-      Qt::BlockingQueuedConnection,
-      Q_ARG(int, logLevel));
-  }
-
-  // Get the filename from the command. The file will be saved to the config file directory with the specified name.
-  // If the file already exists, it will be overwritten.
-  // If no name is specified, it will be created as a .tmp file in the output directory.
-  std::string fileNameAndPath = "";
-  const char* fileName = startServerElement->GetAttribute("FileName");
-  if (fileName)
-  {
-    std::string path = vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationDirectory();
-    fileNameAndPath = path + "/" + fileName;
-    LOG_TRACE("Writing config file to: " << fileName);
-  }
-
-  // Contents of the config file. Identified by root element "PlusConfiguration"
-  std::string configFileContents = "None";
-  vtkSmartPointer<vtkXMLDataElement> configFileElement = startServerElement->FindNestedElementWithName("PlusConfiguration");
-  if (configFileElement)
+  else
   {
     std::stringstream configFileContentsStream;
     vtkXMLUtilities::FlattenElement(configFileElement, configFileContentsStream);
     configFileContents = configFileContentsStream.str();
   }
 
-  if (STRCASECMP(configFileContents.c_str(), "None") == 0)
+  // Log level found in <LogLevel Value=X /> format
+  int logLevel = 0;
+  vtkXMLDataElement* logLevelElement = startServerCommandElement->FindNestedElementWithName("LogLevel");
+  if (logLevelElement)
   {
-    LOG_TRACE("No config file contents found!");
-    if (STRCASECMP(fileNameAndPath.c_str(), "") != 0)
+    vtkSmartPointer<vtkXMLDataElement> logLevelResponseElement = vtkSmartPointer<vtkXMLDataElement>::New();
+    logLevelResponseElement->SetName("LogLevel");
+
+    logLevelElement->GetScalarAttribute("Value", logLevel);
+
+    if (logLevel != 0)
     {
-      // Attempt to connect to the server, the connection process will block this thread
-      LOG_TRACE("Attempting to start server using: " << fileNameAndPath);
-      PlusStatus serverStartSuccess = PLUS_FAIL;
       QMetaObject::invokeMethod(self->MainWindow,
-        "ConnectToDevicesByConfigFile",
+        "SetLogLevel",
         Qt::BlockingQueuedConnection,
-        Q_ARG(std::string, fileNameAndPath));
+        Q_ARG(int, logLevel));
+      logLevelResponseElement->SetAttribute("Success", "true");
     }
     else
     {
-      // TODO: what to do if user doesn't specify config file?
-      // Activate with currently selected config file?
-      LOG_TRACE("No config file name found!");
-      LOG_TRACE("Attempting to connect using the currently selected config file.");
-      QMetaObject::invokeMethod(self->DeviceSetSelectorWidget,
-        "ConnectToDevicesByConfigFile",
-        Qt::BlockingQueuedConnection,
-        Q_ARG(std::string, vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationFileName()));
+      logLevelResponseElement->SetAttribute("Success", "false");
     }
-
-    std::string serverStarted = "false";
-    if (self->MainWindow->GetServerStatus() == QProcess::Running)
-    {
-      serverStarted = "true";
-    }
-
-    vtkSmartPointer<vtkXMLDataElement> startServerResponse = vtkSmartPointer<vtkXMLDataElement>::New();
-    startServerResponse->SetName("StartServer");
-    startServerResponse->SetAttribute("Success", serverStarted.c_str());
-    commandResponseElementRoot->AddNestedElement(startServerResponse);
+    startServerResponseElement->AddNestedElement(logLevelResponseElement);
   }
-  else
+  
+  // TODO: Should it be allowed to specify filename?
+  std::string filenameAndPath = "";
+  std::string path = vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationDirectory();
+  std::string filename = "";
+  PlusCommon::CreateTemporaryFilename(filename, vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationDirectory());
+  filenameAndPath = path + "/" + filename;
+
+  if (STRCASECMP(configFileContents.c_str(), "") != 0)
   {
+    plusConfigurationResponseElement->SetAttribute("Success", "true");
+    vtkPlusServerLauncherRemoteControl::RespondToCommand(self, commandDevice, startServerResponseElement);
+
     // Attempt to connect to the server, the connection process will block this thread
     QMetaObject::invokeMethod(self->MainWindow,
       "ConnectToDevicesByConfigString",
       Qt::BlockingQueuedConnection,
       Q_ARG(std::string, configFileContents),
-      Q_ARG(std::string, fileNameAndPath)
-      );
-
-    vtkSmartPointer<vtkXMLDataElement> startServerResponse = vtkSmartPointer<vtkXMLDataElement>::New();
-    startServerResponse->SetName("StartServer");
-    commandResponseElementRoot->AddNestedElement(startServerResponse);
+      Q_ARG(std::string, "")
+      );  
   }
+  else
+  {
+    plusConfigurationResponseElement->SetAttribute("Success", "false");
+    vtkPlusServerLauncherRemoteControl::RespondToCommand(self, commandDevice, startServerResponseElement);
+  }
+  
 }
 
 //---------------------------------------------------------------------------
-void vtkPlusServerLauncherRemoteControl::StopServerCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* startServerElement, vtkXMLDataElement* commandResponseElementRoot)
+void vtkPlusServerLauncherRemoteControl::StopServerCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* stopServerCommandElement, igtlio::CommandDevicePointer commandDevice)
 {
-  //TODO: Any info to read for stop command?
-  LOG_INFO("Server stop command received");
+  LOG_DEBUG("Server stop command received");
+
+  vtkSmartPointer<vtkXMLDataElement> stopServerResponseElement = vtkSmartPointer<vtkXMLDataElement>::New();
+  stopServerResponseElement->SetName("Command");
+
+  vtkSmartPointer<vtkXMLDataElement> stopServerElement = vtkSmartPointer<vtkXMLDataElement>::New();
+  stopServerElement->SetName("StopServer");
+  stopServerElement->SetAttribute("Success", "true");
+  stopServerResponseElement->AddNestedElement(stopServerElement);
+  vtkPlusServerLauncherRemoteControl::RespondToCommand(self, commandDevice, stopServerResponseElement);
 
   QMetaObject::invokeMethod(self->MainWindow,
     "ConnectToDevicesByConfigFile",
     Qt::BlockingQueuedConnection,
     Q_ARG(std::string, ""));
+}
 
-  vtkSmartPointer<vtkXMLDataElement> stopServerResponse = vtkSmartPointer<vtkXMLDataElement>::New();
-  stopServerResponse->SetName("StopServer");
-  commandResponseElementRoot->AddNestedElement(stopServerResponse);
+//---------------------------------------------------------------------------
+void vtkPlusServerLauncherRemoteControl::GetServerInfoCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* getServerInfoCommandElement, igtlio::CommandDevicePointer commandDevice)
+{
+  LOG_DEBUG("Get server info command received");
+
+  vtkSmartPointer<vtkXMLDataElement> getServerInfoResponseElement = vtkSmartPointer<vtkXMLDataElement>::New();
+  getServerInfoResponseElement->SetName("Command");
+
+  // TODO: Should this be generalized to get all of a specific attribute from the config file?
+  //       ie. DataCollection, CoordinateDefinitions, etc.
+  vtkXMLDataElement* getPlusOpenIGTLinkServerElement = getServerInfoCommandElement->FindNestedElementWithName("PlusOpenIGTLinkServer");
+  if (getPlusOpenIGTLinkServerElement)
+  {
+    vtkXMLDataElement* configFileElement = vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationData();
+    LOG_WARNING(vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationFileName());
+    if (configFileElement)
+    {
+      for (int i = 0; i < configFileElement->GetNumberOfNestedElements(); ++i)
+      {
+        vtkXMLDataElement* nestedElement = configFileElement->GetNestedElement(i);
+        if (!nestedElement || STRCASECMP(nestedElement->GetName(), "PlusOpenIGTLinkServer") != 0)
+        {
+          continue;
+        }
+        getServerInfoResponseElement->AddNestedElement(nestedElement);
+      }
+    }
+  }
+  vtkPlusServerLauncherRemoteControl::RespondToCommand(self, commandDevice, getServerInfoResponseElement);
 }
 
 //---------------------------------------------------------------------------
