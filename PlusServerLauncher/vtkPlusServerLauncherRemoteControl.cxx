@@ -6,6 +6,8 @@
 #include <QPlusDeviceSetSelectorWidget.h>
 #include <vtkPlusLogger.h>
 
+const char* PLUS_SERVER_LAUNCHER_REMOTE_DEVICE_ID = "PSL_Remote";
+
 vtkStandardNewMacro(vtkPlusServerLauncherRemoteControl);
 
 vtkPlusServerLauncherRemoteControl::vtkPlusServerLauncherRemoteControl()
@@ -121,19 +123,59 @@ void vtkPlusServerLauncherRemoteControl::OnRemoteControlServerEventReceived(vtkO
 void vtkPlusServerLauncherRemoteControl::OnLogEvent(vtkObject* caller, unsigned long eventId, void* clientData, void* callData)
 {
   vtkPlusServerLauncherRemoteControl* self = reinterpret_cast<vtkPlusServerLauncherRemoteControl*>(clientData);
-  const char* logMessage = static_cast<char*>(callData);
+  const char* rawLogMessage = static_cast<char*>(callData);
+  std::string logString = std::string(rawLogMessage);
+
+  if (logString.empty())
+  {
+    return;
+  }
+
+  typedef std::vector<std::string> StringList;
+  StringList tokens;
+
+  if (logString.find('|') == std::string::npos)
+  {
+    return;
+  }
+
+  PlusCommon::SplitStringIntoTokens(logString, '|', tokens, false);
+  if (tokens.size() == 0)
+  {
+    return;
+  }
+
+  std::string logLevel = tokens[0];
+  std::string messageOrigin;
+  if (tokens.size() > 2 && logString.find("SERVER>") != std::string::npos)
+  {
+    messageOrigin = "SERVER";
+  }
+  else
+  {
+    messageOrigin = "LAUNCHER";
+  }
+
+  std::stringstream message;
+  for (int i = 1; i < tokens.size(); ++i)
+  {
+    message << "|" << tokens[i];
+  }
+  std::string logMessage = message.str();
 
   vtkSmartPointer<vtkXMLDataElement> commandElement = vtkSmartPointer<vtkXMLDataElement>::New();
   commandElement->SetName("Command");
 
   vtkSmartPointer<vtkXMLDataElement> messageElement = vtkSmartPointer<vtkXMLDataElement>::New();
   messageElement->SetName("LogMessage");
-  messageElement->SetAttribute("Text", logMessage);
+  messageElement->SetAttribute("Text", logMessage.c_str());
+  messageElement->SetAttribute("LogLevel", logLevel.c_str());
+  messageElement->SetAttribute("Origin", messageOrigin.c_str());
   commandElement->AddNestedElement(messageElement);
 
   std::stringstream messageCommand;
   vtkXMLUtilities::FlattenElement(commandElement, messageCommand);
-  self->RemoteControlServerSession->SendCommand("PlusServerLauncherRemote", "LogMessage", messageCommand.str(), igtlio::ASYNCHRONOUS);
+  self->RemoteControlServerSession->SendCommand(PLUS_SERVER_LAUNCHER_REMOTE_DEVICE_ID, "LogMessage", messageCommand.str(), igtlio::ASYNCHRONOUS);
 }
 
 //---------------------------------------------------------------------------
@@ -399,7 +441,7 @@ void vtkPlusServerLauncherRemoteControl::SendServerStartupSignal()
 
   std::stringstream signalStream;
   vtkXMLUtilities::FlattenElement(commandElement, signalStream);
-  this->RemoteControlServerSession->SendCommand(this->GetCommandName(), "ServerStarted", signalStream.str(), igtlio::ASYNCHRONOUS);
+  this->RemoteControlServerSession->SendCommand(PLUS_SERVER_LAUNCHER_REMOTE_DEVICE_ID, "ServerStarted", signalStream.str(), igtlio::ASYNCHRONOUS);
 
 }
 
@@ -424,7 +466,7 @@ void vtkPlusServerLauncherRemoteControl::SendServerShutdownSignal()
 
   std::stringstream signalStream;
   vtkXMLUtilities::FlattenElement(commandElement, signalStream);
-  this->RemoteControlServerSession->SendCommand(this->GetCommandName(), "ServerStopped", signalStream.str(), igtlio::ASYNCHRONOUS);
+  this->RemoteControlServerSession->SendCommand(PLUS_SERVER_LAUNCHER_REMOTE_DEVICE_ID, "ServerStopped", signalStream.str(), igtlio::ASYNCHRONOUS);
 }
 
 //----------------------------------------------------------------------------
