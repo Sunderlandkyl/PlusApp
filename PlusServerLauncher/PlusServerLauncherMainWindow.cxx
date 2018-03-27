@@ -512,6 +512,11 @@ void PlusServerLauncherMainWindow::ServerExecutableFinished(int returnCode, QPro
   this->ConnectToDevicesByConfigFile("");
   ui.comboBox_LogLevel->setEnabled(true);
   m_DeviceSetSelectorWidget->SetConnectionSuccessful(false);
+
+  if (m_LauncherRemoteControl)
+  {
+    m_LauncherRemoteControl->SendServerShutdownSignal();
+  }
 }
 
 //----------------------------------------------------------------------------
