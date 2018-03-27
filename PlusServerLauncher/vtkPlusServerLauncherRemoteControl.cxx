@@ -120,65 +120,6 @@ void vtkPlusServerLauncherRemoteControl::OnRemoteControlServerEventReceived(vtkO
 }
 
 //---------------------------------------------------------------------------
-void vtkPlusServerLauncherRemoteControl::OnLogEvent(vtkObject* caller, unsigned long eventId, void* clientData, void* callData)
-{
-  vtkPlusServerLauncherRemoteControl* self = reinterpret_cast<vtkPlusServerLauncherRemoteControl*>(clientData);
-  const char* rawLogMessage = static_cast<char*>(callData);
-  std::string logString = std::string(rawLogMessage);
-
-  if (logString.empty())
-  {
-    return;
-  }
-
-  typedef std::vector<std::string> StringList;
-  StringList tokens;
-
-  if (logString.find('|') == std::string::npos)
-  {
-    return;
-  }
-
-  PlusCommon::SplitStringIntoTokens(logString, '|', tokens, false);
-  if (tokens.size() == 0)
-  {
-    return;
-  }
-
-  std::string logLevel = tokens[0];
-  std::string messageOrigin;
-  if (tokens.size() > 2 && logString.find("SERVER>") != std::string::npos)
-  {
-    messageOrigin = "SERVER";
-  }
-  else
-  {
-    messageOrigin = "LAUNCHER";
-  }
-
-  std::stringstream message;
-  for (int i = 1; i < tokens.size(); ++i)
-  {
-    message << "|" << tokens[i];
-  }
-  std::string logMessage = message.str();
-
-  vtkSmartPointer<vtkXMLDataElement> commandElement = vtkSmartPointer<vtkXMLDataElement>::New();
-  commandElement->SetName("Command");
-
-  vtkSmartPointer<vtkXMLDataElement> messageElement = vtkSmartPointer<vtkXMLDataElement>::New();
-  messageElement->SetName("LogMessage");
-  messageElement->SetAttribute("Text", logMessage.c_str());
-  messageElement->SetAttribute("LogLevel", logLevel.c_str());
-  messageElement->SetAttribute("Origin", messageOrigin.c_str());
-  commandElement->AddNestedElement(messageElement);
-
-  std::stringstream messageCommand;
-  vtkXMLUtilities::FlattenElement(commandElement, messageCommand);
-  self->RemoteControlServerSession->SendCommand(PLUS_SERVER_LAUNCHER_REMOTE_DEVICE_ID, "LogMessage", messageCommand.str(), igtlio::ASYNCHRONOUS);
-}
-
-//---------------------------------------------------------------------------
 void vtkPlusServerLauncherRemoteControl::OnConnectEvent(vtkPlusServerLauncherRemoteControl* self, igtlio::ConnectorPointer connector)
 {
   LOG_INFO("Launcher remote control connected.")
@@ -226,10 +167,6 @@ void vtkPlusServerLauncherRemoteControl::OnCommandReceivedEvent(vtkPlusServerLau
         else if (STRCASECMP(commandName, "StopServer") == 0)
         {
           self->StopServerCommand(self, rootElement, commandDevice);
-        }
-        else if (STRCASECMP(commandName, "GetServerInfo") == 0)
-        {
-          self->GetServerInfoCommand(self, rootElement, commandDevice);
         }
       }
     }
@@ -338,73 +275,6 @@ void vtkPlusServerLauncherRemoteControl::StopServerCommand(vtkPlusServerLauncher
 }
 
 //---------------------------------------------------------------------------
-void vtkPlusServerLauncherRemoteControl::GetServerInfoCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* getServerInfoCommandElement, igtlio::CommandDevicePointer commandDevice)
-{
-  LOG_DEBUG("Get server info command received");
-
-  vtkSmartPointer<vtkXMLDataElement> getServerInfoResponseElement = vtkSmartPointer<vtkXMLDataElement>::New();
-  getServerInfoResponseElement->SetName("Command");
-
-  // TODO: Should this be generalized to get all of a specific attribute from the config file?
-  //       ie. DataCollection, CoordinateDefinitions, etc.
-  vtkXMLDataElement* getPlusOpenIGTLinkServerElement = getServerInfoCommandElement->FindNestedElementWithName("PlusOpenIGTLinkServer");
-  if (getPlusOpenIGTLinkServerElement)
-  {
-    vtkXMLDataElement* configFileElement = vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationData();
-    LOG_WARNING(vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationFileName());
-    if (configFileElement)
-    {
-      for (int i = 0; i < configFileElement->GetNumberOfNestedElements(); ++i)
-      {
-        vtkXMLDataElement* nestedElement = configFileElement->GetNestedElement(i);
-        if (!nestedElement || STRCASECMP(nestedElement->GetName(), "PlusOpenIGTLinkServer") != 0)
-        {
-          continue;
-        }
-        getServerInfoResponseElement->AddNestedElement(nestedElement);
-      }
-    }
-  }
-  vtkPlusServerLauncherRemoteControl::RespondToCommand(self, commandDevice, getServerInfoResponseElement);
-}
-
-//---------------------------------------------------------------------------
-void vtkPlusServerLauncherRemoteControl::GetCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* rootElement, vtkXMLDataElement* commandResponseElementRoot)
-{
-  // Look for all of the "Get" statements
-  for (int i = 0; i < rootElement->GetNumberOfNestedElements(); ++i)
-  {
-    vtkSmartPointer<vtkXMLDataElement> nestedElement = rootElement->GetNestedElement(i);
-    if (STRCASECMP(nestedElement->GetName(), "Get") == 0)
-    {
-      const char* parameterName = nestedElement->GetAttribute("Name");
-      if (parameterName)
-      {
-        LOG_TRACE("Command received: Get(" << parameterName << ")");
-
-        vtkSmartPointer<vtkXMLDataElement> getResponseElement = vtkSmartPointer<vtkXMLDataElement>::New();
-        if (STRCASECMP(parameterName, "Status") == 0)
-        {
-          const char* status = "Off";
-          if (self->MainWindow->GetServerStatus() == QProcess::Running)
-          {
-            status = "On";
-          }
-          getResponseElement->SetName(nestedElement->GetName());
-          getResponseElement->SetAttribute("Status", status);
-        }
-        else
-        {
-          // Not a recognized parameter, move to the next "Get" element
-          continue;
-        }
-        commandResponseElementRoot->AddNestedElement(getResponseElement);
-      }
-    }
-  }
-}
-
-//---------------------------------------------------------------------------
 void vtkPlusServerLauncherRemoteControl::RespondToCommand(vtkPlusServerLauncherRemoteControl* self, igtlio::CommandDevicePointer commandDevice, vtkXMLDataElement* response)
 {
   igtlio::CommandConverter::ContentData contentData = commandDevice->GetContent();
@@ -470,17 +340,66 @@ void vtkPlusServerLauncherRemoteControl::SendServerShutdownSignal()
 }
 
 //----------------------------------------------------------------------------
-std::string vtkPlusServerLauncherRemoteControl::GetCommandName()
-{
-  std::stringstream nameStream;
-  //nameStream << "CMD_";
-  //nameStream << this->CommandId;
-  nameStream << "RemoteControl";
-  return nameStream.str();
-}
-
-//----------------------------------------------------------------------------
 void vtkPlusServerLauncherRemoteControl::PrintSelf(ostream& os, vtkIndent indent)
 {
   this->Superclass::PrintSelf(os, indent);
+}
+
+//---------------------------------------------------------------------------
+void vtkPlusServerLauncherRemoteControl::OnLogEvent(vtkObject* caller, unsigned long eventId, void* clientData, void* callData)
+{
+  vtkPlusServerLauncherRemoteControl* self = reinterpret_cast<vtkPlusServerLauncherRemoteControl*>(clientData);
+  const char* rawLogMessage = static_cast<char*>(callData);
+  std::string logString = std::string(rawLogMessage);
+
+  if (logString.empty())
+  {
+    return;
+  }
+
+  typedef std::vector<std::string> StringList;
+  StringList tokens;
+
+  if (logString.find('|') == std::string::npos)
+  {
+    return;
+  }
+
+  PlusCommon::SplitStringIntoTokens(logString, '|', tokens, false);
+  if (tokens.size() == 0)
+  {
+    return;
+  }
+
+  std::string logLevel = tokens[0];
+  std::string messageOrigin;
+  if (tokens.size() > 2 && logString.find("SERVER>") != std::string::npos)
+  {
+    messageOrigin = "SERVER";
+  }
+  else
+  {
+    messageOrigin = "LAUNCHER";
+  }
+
+  std::stringstream message;
+  for (int i = 1; i < tokens.size(); ++i)
+  {
+    message << "|" << tokens[i];
+  }
+  std::string logMessage = message.str();
+
+  vtkSmartPointer<vtkXMLDataElement> commandElement = vtkSmartPointer<vtkXMLDataElement>::New();
+  commandElement->SetName("Command");
+
+  vtkSmartPointer<vtkXMLDataElement> messageElement = vtkSmartPointer<vtkXMLDataElement>::New();
+  messageElement->SetName("LogMessage");
+  messageElement->SetAttribute("Text", logMessage.c_str());
+  messageElement->SetAttribute("LogLevel", logLevel.c_str());
+  messageElement->SetAttribute("Origin", messageOrigin.c_str());
+  commandElement->AddNestedElement(messageElement);
+
+  std::stringstream messageCommand;
+  vtkXMLUtilities::FlattenElement(commandElement, messageCommand);
+  self->RemoteControlServerSession->SendCommand(PLUS_SERVER_LAUNCHER_REMOTE_DEVICE_ID, "LogMessage", messageCommand.str(), igtlio::ASYNCHRONOUS);
 }
