@@ -69,6 +69,7 @@ public slots:
   int GetLogLevel();
 
   int GetServerStatus();
+  int GetServerError();
 
 protected slots:
 

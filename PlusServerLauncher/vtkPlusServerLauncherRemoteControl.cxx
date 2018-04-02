@@ -159,7 +159,6 @@ void vtkPlusServerLauncherRemoteControl::OnCommandReceivedEvent(vtkPlusServerLau
           continue;
         }
 
-        
         if (STRCASECMP(commandName, "StartServer") == 0)
         {
           self->StartServerCommand(self, rootElement, commandDevice);
@@ -167,6 +166,10 @@ void vtkPlusServerLauncherRemoteControl::OnCommandReceivedEvent(vtkPlusServerLau
         else if (STRCASECMP(commandName, "StopServer") == 0)
         {
           self->StopServerCommand(self, rootElement, commandDevice);
+        }
+        else if (STRCASECMP(commandName, "GetServerInfo") == 0)
+        {
+          self->GetServerInfoCommand(self, rootElement, commandDevice);
         }
       }
     }
@@ -177,10 +180,10 @@ void vtkPlusServerLauncherRemoteControl::OnCommandReceivedEvent(vtkPlusServerLau
 void vtkPlusServerLauncherRemoteControl::StartServerCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* startServerCommandElement, igtlio::CommandDevicePointer commandDevice)
 {
   LOG_DEBUG("Server Start command received");
-  
+
   vtkSmartPointer<vtkXMLDataElement> startServerResponseElement = vtkSmartPointer<vtkXMLDataElement>::New();
   startServerResponseElement->SetName("Command");
-  
+
   vtkSmartPointer<vtkXMLDataElement> plusConfigurationResponseElement = vtkSmartPointer<vtkXMLDataElement>::New();
   plusConfigurationResponseElement->SetName("PlusConfiguration");
   startServerResponseElement->AddNestedElement(plusConfigurationResponseElement);
@@ -225,7 +228,7 @@ void vtkPlusServerLauncherRemoteControl::StartServerCommand(vtkPlusServerLaunche
     }
     startServerResponseElement->AddNestedElement(logLevelResponseElement);
   }
-  
+
   // TODO: Should it be allowed to specify filename?
   std::string filenameAndPath = "";
   std::string path = vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationDirectory();
@@ -235,7 +238,6 @@ void vtkPlusServerLauncherRemoteControl::StartServerCommand(vtkPlusServerLaunche
 
   if (STRCASECMP(configFileContents.c_str(), "") != 0)
   {
-    plusConfigurationResponseElement->SetAttribute("Success", "true");
     vtkPlusServerLauncherRemoteControl::RespondToCommand(self, commandDevice, startServerResponseElement);
 
     // Attempt to connect to the server, the connection process will block this thread
@@ -244,14 +246,14 @@ void vtkPlusServerLauncherRemoteControl::StartServerCommand(vtkPlusServerLaunche
       Qt::BlockingQueuedConnection,
       Q_ARG(std::string, configFileContents),
       Q_ARG(std::string, "")
-      );  
+      );
   }
   else
   {
     plusConfigurationResponseElement->SetAttribute("Success", "false");
     vtkPlusServerLauncherRemoteControl::RespondToCommand(self, commandDevice, startServerResponseElement);
   }
-  
+
 }
 
 //---------------------------------------------------------------------------
@@ -275,6 +277,65 @@ void vtkPlusServerLauncherRemoteControl::StopServerCommand(vtkPlusServerLauncher
 }
 
 //---------------------------------------------------------------------------
+void vtkPlusServerLauncherRemoteControl::GetServerInfoCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* getServerInfoCommandElement, igtlio::CommandDevicePointer commandDevice)
+{
+  LOG_DEBUG("Get server info command received");
+
+  vtkSmartPointer<vtkXMLDataElement> getServerInfoResponseElement = vtkSmartPointer<vtkXMLDataElement>::New();
+  getServerInfoResponseElement->SetName("Command");
+
+  std::string status = "";
+  switch (self->MainWindow->GetServerStatus())
+  {
+  case QProcess::ProcessState::Starting:
+    status = "Starting";
+    break;
+  case QProcess::ProcessState::Running:
+    status = "Running";
+  case QProcess::ProcessState::NotRunning:
+  default:
+    status = "Not running";
+  }
+
+  std::string error = "";
+  switch (self->MainWindow->GetServerError())
+  {
+  case QProcess::ProcessError::Crashed:
+    error = "Crashed";
+    break;
+  case QProcess::ProcessError::FailedToStart:
+    error = "Failed to start";
+    break;
+  case QProcess::ProcessError::ReadError:
+    error = "Read error";
+    break;
+  case QProcess::ProcessError::Timedout:
+    error = "Timed out";
+    break;
+  case QProcess::ProcessError::WriteError:
+      error = "Write error";
+      break;
+  case QProcess::ProcessError::UnknownError:
+    error = "Unknown error";
+    break;
+  default:
+    error = "None";
+  }
+
+  vtkSmartPointer<vtkXMLDataElement> serverStatusElement = vtkSmartPointer<vtkXMLDataElement>::New();
+  serverStatusElement->SetAttribute("Status", status.c_str());
+  serverStatusElement->SetAttribute("Error", error.c_str());
+  getServerInfoResponseElement->AddNestedElement(serverStatusElement);
+
+  // TODO: check currently running server instance for port
+  vtkSmartPointer<vtkXMLDataElement> outgoingServerPortsElement = vtkSmartPointer<vtkXMLDataElement>::New();
+  outgoingServerPortsElement->SetIntAttribute("Ports", 18944);
+  getServerInfoResponseElement->AddNestedElement(outgoingServerPortsElement);
+
+  self->RespondToCommand(self, commandDevice, getServerInfoResponseElement);
+}
+
+//---------------------------------------------------------------------------
 void vtkPlusServerLauncherRemoteControl::RespondToCommand(vtkPlusServerLauncherRemoteControl* self, igtlio::CommandDevicePointer commandDevice, vtkXMLDataElement* response)
 {
   igtlio::CommandConverter::ContentData contentData = commandDevice->GetContent();
@@ -286,7 +347,7 @@ void vtkPlusServerLauncherRemoteControl::RespondToCommand(vtkPlusServerLauncherR
 }
 
 //---------------------------------------------------------------------------
-void vtkPlusServerLauncherRemoteControl::SendServerStartupSignal()
+void vtkPlusServerLauncherRemoteControl::SendServerStartupSignal(const char* filename)
 {
 
   std::string status = "Off";
@@ -307,6 +368,42 @@ void vtkPlusServerLauncherRemoteControl::SendServerStartupSignal()
   startServerElement->SetName("ServerStarted");
   startServerElement->SetAttribute("Status", status.c_str());
   startServerElement->SetAttribute("LogLevel", std::to_string(this->MainWindow->GetLogLevel()).c_str());
+
+  vtkSmartPointer<vtkXMLDataElement> configFileElement = NULL;
+  if (filename)
+  {
+    configFileElement = vtkSmartPointer<vtkXMLDataElement>::Take(vtkXMLUtilities::ReadElementFromFile(filename));
+  }
+
+  if (configFileElement)
+  {
+    std::string ports;
+    for (int i = 0; i < configFileElement->GetNumberOfNestedElements(); ++i)
+    {
+      vtkXMLDataElement* nestedElement = configFileElement->GetNestedElement(i);
+      if (strcmp(nestedElement->GetName(), "PlusOpenIGTLinkServer") == 0)
+      {
+        std::stringstream serverNamePrefix;
+        const char* outputChannelId = nestedElement->GetAttribute("OutputChannelId");
+        if (outputChannelId)
+        {
+          serverNamePrefix << outputChannelId;
+        }
+        else
+        {
+          serverNamePrefix << "PlusOpenIGTLinkServer";
+        }
+        serverNamePrefix << ":";
+        const char* port = nestedElement->GetAttribute("ListeningPort");
+        if (port)
+        {
+          ports += serverNamePrefix.str() + std::string(port) + ";";
+        }
+      }
+    }
+    startServerElement->SetAttribute("Servers", ports.c_str());
+  }
+
   commandElement->AddNestedElement(startServerElement);
 
   std::stringstream signalStream;

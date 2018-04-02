@@ -31,7 +31,7 @@ public:
   PlusStatus StopRemoteControlServer();
   void CreateNewConnector();
 
-  void SendServerStartupSignal();
+  void SendServerStartupSignal(const char* filename = "");
   void SendServerShutdownSignal();
 
 protected:
@@ -40,6 +40,8 @@ protected:
 
   void StartServerCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* startServerCommandElement, igtlio::CommandDevicePointer commandDevice);
   void StopServerCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* stopServerCommandElement, igtlio::CommandDevicePointer commandDevice);
+  void GetServerInfoCommand(vtkPlusServerLauncherRemoteControl* self, vtkXMLDataElement* getServerInfoCommandElement, igtlio::CommandDevicePointer commandDevice);
+
   std::string GetOutgoingPortsFromConfigFile(vtkXMLDataElement* configFileElement);
 
   static void OnCommandReceivedEvent(vtkPlusServerLauncherRemoteControl* self, igtlio::LogicPointer logic);

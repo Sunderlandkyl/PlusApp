@@ -213,7 +213,8 @@ bool PlusServerLauncherMainWindow::StartServer(const QString& configFilePath)
 
     if (m_LauncherRemoteControl)
     {
-      m_LauncherRemoteControl->SendServerStartupSignal();
+      std::string configFile = configFilePath.toStdString();
+      m_LauncherRemoteControl->SendServerStartupSignal(configFile.c_str());
     }
     return true;
   }
@@ -545,5 +546,19 @@ int PlusServerLauncherMainWindow::GetServerStatus()
   else
   {
     return false;
+  }
+}
+
+//----------------------------------------------------------------------------
+int PlusServerLauncherMainWindow::GetServerError()
+{
+  
+  if (m_CurrentServerInstance)
+  {
+    return m_CurrentServerInstance->error();
+  }
+  else
+  {
+    return -1;
   }
 }
