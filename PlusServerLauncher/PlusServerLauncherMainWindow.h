@@ -14,7 +14,6 @@
 #include <QProcess>
 
 // OpenIGTLinkIO includes
-#include <igtlioCommandDevice.h>
 #include <igtlioConnector.h>
 #include <igtlioLogic.h>
 
@@ -76,7 +75,7 @@ protected slots:
   void LogLevelChanged();
 
   static void OnRemoteControlServerEventReceived(vtkObject* caller, unsigned long eventId, void* clientdata, void* calldata);
-  void OnCommandReceivedEvent(igtlio::LogicPointer logic);
+  void OnCommandReceivedEvent(CommandPointer command);
 
   void OnWritePermissionClicked();
 
@@ -99,13 +98,13 @@ protected:
   void ParseContent(const std::string& message);
 
   /*! Send a response to a command */
-  PlusStatus SendCommandResponse(std::string device_id, std::string command, std::string content, igtl::MessageBase::MetaDataMap metaData = igtl::MessageBase::MetaDataMap());
+  PlusStatus SendCommandResponse(CommandPointer command);
 
   /*! Incoming command handling functions */
-  void AddOrUpdateConfigFile(igtlio::CommandDevicePointer clientDevice);
-  void GetConfigFiles(igtlio::CommandDevicePointer clientDevice);
-  void RemoteStartServer(igtlio::CommandDevicePointer clientDevice);
-  void RemoteStopServer(igtlio::CommandDevicePointer clientDevice);
+  void AddOrUpdateConfigFile(CommandPointer command);
+  void GetConfigFiles(CommandPointer command);
+  void RemoteStartServer(CommandPointer command);
+  void RemoteStopServer(CommandPointer command);
 
   void LocalLog(vtkPlusLogger::LogLevelType level, const std::string& message);
 
