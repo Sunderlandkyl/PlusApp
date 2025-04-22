@@ -89,33 +89,23 @@ ELSE()
   MESSAGE(WARNING "Unable to set PlusLib_DIR for package generation!")
 ENDIF()
 
-# TODO: Temporary fix to ensure that packaging works with the installed VTK and ITK
-# This should be removed once we figure out how to use the VTK_DIR and ITK_DIR for installed VTK/ITK
-IF(NOT VTK_BIN_DIR)
-  SET(VTK_BIN_DIR ${VTK_DIR})
-ENDIF()
-IF(NOT ITK_BIN_DIR)
-  SET(ITK_BIN_DIR ${ITK_DIR})
-ENDIF()
+# 2) VTK shared libraries
+get_filename_component(_vtk_prefix "${VTK_DIR}/../../.." ABSOLUTE)
+install(DIRECTORY "${_vtk_prefix}/lib/" DESTINATION lib
+    FILES_MATCHING PATTERN "*.dll" PATTERN "*.lib"
+)
+install(DIRECTORY "${_vtk_prefix}/bin/" DESTINATION bin
+    FILES_MATCHING PATTERN "*.dll" PATTERN "*.lib"
+)
 
-IF(EXISTS "${VTK_DIR}/VTKTargets.cmake" OR EXISTS "${VTK_DIR}/VTK-Targets.cmake" OR EXISTS "${VTK_DIR}/VTK-targets.cmake")
-  IF(${VTK_MAJOR_VERSION} GREATER_EQUAL 9)
-    LIST(APPEND CPACK_INSTALL_CMAKE_PROJECTS "${VTK_BIN_DIR};VTK;runtime;/") #TODO: Remove when VTK_DIR packages correctly
-  ELSE()
-    LIST(APPEND CPACK_INSTALL_CMAKE_PROJECTS "${VTK_BIN_DIR};VTK;RuntimeLibraries;/") #TODO: Remove when VTK_DIR packages correctly
-  ENDIF()
-ELSE()
-  MESSAGE(WARNING "Unable to set VTK_DIR for package generation!")
-ENDIF()
-
-IF(EXISTS "${ITK_DIR}/ITKTargets.cmake")
-  SET(ITK_USE_REVIEW OFF)
-  LIST(APPEND CPACK_INSTALL_CMAKE_PROJECTS "${ITK_BIN_DIR};ITK;RuntimeLibraries;/") #TODO: Remove when ITK_DIR packages correctly
-  LIST(APPEND CPACK_INSTALL_CMAKE_PROJECTS "${ITK_BIN_DIR};ITK;libraries;/")
-  LIST(APPEND CPACK_INSTALL_CMAKE_PROJECTS "${ITK_BIN_DIR};ITK;cpplibraries;/")
-ELSE()
-  MESSAGE(WARNING "Unable to set ITK_DIR for package generation!")
-ENDIF()
+# 3) ITK shared libraries (same idea)
+get_filename_component(_itk_prefix "${ITK_DIR}/../../.." ABSOLUTE)
+install(DIRECTORY "${_itk_prefix}/lib/" DESTINATION lib
+    FILES_MATCHING PATTERN "*.dll" PATTERN "*.lib" PATTERN "*.so*" PATTERN "*.dylib"
+)
+install(DIRECTORY "${_itk_prefix}/bin/" DESTINATION bin
+    FILES_MATCHING PATTERN "*.dll" PATTERN "*.lib" PATTERN "*.so*" PATTERN "*.dylib"
+)
 
 IF(PLUS_USE_OpenIGTLink)
   IF(EXISTS "${OpenIGTLink_DIR}/CMakeCache.txt")
