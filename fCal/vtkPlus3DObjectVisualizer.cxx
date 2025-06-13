@@ -10,7 +10,7 @@ See License.txt for details.
 
 // PlusLib includes
 #include <PlusConfigure.h>
-#include <PlusTrackedFrame.h>
+#include <igsioTrackedFrame.h>
 #include <vtkPlusChannel.h>
 #include <vtkPlusDevice.h>
 
@@ -106,7 +106,7 @@ PlusStatus vtkPlus3DObjectVisualizer::Update()
   }
 
   // Get tracked frame and set the transforms
-  PlusTrackedFrame trackedFrame;
+  igsioTrackedFrame trackedFrame;
   if (this->SelectedChannel->GetTrackedFrame(trackedFrame) != PLUS_SUCCESS)
   {
     LOG_ERROR("Failed to get tracked frame!");
@@ -129,7 +129,7 @@ PlusStatus vtkPlus3DObjectVisualizer::Update()
   for (std::vector<vtkPlusDisplayableObject*>::iterator it = this->DisplayableObjects.begin(); it != this->DisplayableObjects.end(); ++it)
   {
     vtkPlusDisplayableObject* displayableObject = *it;
-    PlusTransformName objectCoordinateFrameToWorldTransformName(displayableObject->GetObjectCoordinateFrame(), this->WorldCoordinateFrame);
+    igsioTransformName objectCoordinateFrameToWorldTransformName(displayableObject->GetObjectCoordinateFrame(), this->WorldCoordinateFrame);
     vtkSmartPointer<vtkMatrix4x4> objectCoordinateFrameToWorldTransformMatrix = vtkSmartPointer<vtkMatrix4x4>::New();
 
     // If not displayable or valid transform does not exist then hide
@@ -144,15 +144,15 @@ PlusStatus vtkPlus3DObjectVisualizer::Update()
     }
 
     // Get object to world transform
-    bool valid = false;
-    if (this->TransformRepository->GetTransform(objectCoordinateFrameToWorldTransformName, objectCoordinateFrameToWorldTransformMatrix, &valid) != PLUS_SUCCESS)
+    ToolStatus status(TOOL_INVALID);
+    if (this->TransformRepository->GetTransform(objectCoordinateFrameToWorldTransformName, objectCoordinateFrameToWorldTransformMatrix, &status) != PLUS_SUCCESS)
     {
       LOG_ERROR("Failed to get transform from object (" << displayableObject->GetObjectCoordinateFrame() << ") to world! (" << this->WorldCoordinateFrame << ")");
       continue;
     }
 
     // If the transform is valid then display it normally
-    if (valid)
+    if (status == TOOL_OK)
     {
       // If opacity was 0.0, then this is the first visualization iteration after switching back from image mode - reset opacity and camera is needed
       // In case of 0.3 it was previously out of view, same opacity and camera reset is needed

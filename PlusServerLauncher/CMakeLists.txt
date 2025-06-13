@@ -33,7 +33,6 @@ SET (PlusServerLauncher_LIBS
   Qt5::Widgets
   Qt5::Network
   vtkPlusCommon
-  vtkGUISupportQt
   PlusWidgets
   vtkPlusServer
   )
@@ -57,7 +56,7 @@ IF(WIN32)
   SET (APP_MODE WIN32)
 ENDIF()
 
-ADD_EXECUTABLE( PlusServerLauncher ${APP_MODE} 
+AddPlusQt5Executable( PlusServerLauncher ${APP_MODE} 
   ${PlusServerLauncher_SRCS} 
   ${PlusServerLauncher_UI_HDRS} 
   ${PlusServerLauncher_UI_SRCS} 

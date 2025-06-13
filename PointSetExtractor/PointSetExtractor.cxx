@@ -15,32 +15,35 @@
   processing.
 */
 
+// Local includes
 #include "PlusConfigure.h"
-#include "PlusTrackedFrame.h"
-#include "vtkActor.h"
-#include "vtkAppendPolyData.h"
-#include "vtkCamera.h"
-#include "vtkCellArray.h"
-#include "vtkGlyph3D.h"
-#include "vtkLineSource.h"
-#include "vtkMatrix4x4.h"
-#include "vtkPLYWriter.h"
-#include "vtkPoints.h"
-#include "vtkPolyData.h"
-#include "vtkPolyDataMapper.h"
-#include "vtkPolyDataNormals.h"
-#include "vtkProperty.h"
-#include "vtkRenderWindow.h"
-#include "vtkRenderWindowInteractor.h"
-#include "vtkRenderer.h"
-#include "vtkSTLWriter.h"
+#include "igsioTrackedFrame.h"
 #include "vtkPlusSequenceIO.h"
-#include "vtkSphereSource.h"
-#include "vtkPlusTrackedFrameList.h"
-#include "vtkPlusTransformRepository.h"
-#include "vtkTriangleFilter.h"
-#include "vtkTubeFilter.h"
-#include "vtkXMLUtilities.h"
+#include "vtkIGSIOTrackedFrameList.h"
+#include "vtkIGSIOTransformRepository.h"
+
+// VTK includes
+#include <vtkActor.h>
+#include <vtkAppendPolyData.h>
+#include <vtkCamera.h>
+#include <vtkCellArray.h>
+#include <vtkGlyph3D.h>
+#include <vtkLineSource.h>
+#include <vtkMatrix4x4.h>
+#include <vtkPLYWriter.h>
+#include <vtkPoints.h>
+#include <vtkPolyData.h>
+#include <vtkPolyDataMapper.h>
+#include <vtkPolyDataNormals.h>
+#include <vtkProperty.h>
+#include <vtkRenderWindow.h>
+#include <vtkRenderWindowInteractor.h>
+#include <vtkRenderer.h>
+#include <vtkSTLWriter.h>
+#include <vtkSphereSource.h>
+#include <vtkTriangleFilter.h>
+#include <vtkTubeFilter.h>
+#include <vtkXMLUtilities.h>
 #include <vtksys/CommandLineArguments.hxx>
 
 int main(int argc, char** argv)
@@ -103,14 +106,14 @@ int main(int argc, char** argv)
   ///////////////
 
   LOG_INFO("Read input file...");
-  vtkSmartPointer<vtkPlusTrackedFrameList> trackedFrameList = vtkSmartPointer<vtkPlusTrackedFrameList>::New();
+  vtkSmartPointer<vtkIGSIOTrackedFrameList> trackedFrameList = vtkSmartPointer<vtkIGSIOTrackedFrameList>::New();
   if (vtkPlusSequenceIO::Read(inputSequenceFileName, trackedFrameList) != PLUS_SUCCESS)
   {
     LOG_ERROR("Failed to read tracked pose sequence metafile: " << inputSequenceFileName);
     return EXIT_FAILURE;
   }
 
-  vtkSmartPointer<vtkPlusTransformRepository> transformRepository = vtkSmartPointer<vtkPlusTransformRepository>::New();
+  vtkSmartPointer<vtkIGSIOTransformRepository> transformRepository = vtkSmartPointer<vtkIGSIOTransformRepository>::New();
 
   // Read config file
   if (!inputConfigFileName.empty())
@@ -121,7 +124,7 @@ int main(int argc, char** argv)
     LOG_DEBUG("Reading config file finished.");
   }
 
-  PlusTransformName stylusToReferenceTransformName(stylusName, referenceName);
+  igsioTransformName stylusToReferenceTransformName(stylusName, referenceName);
   if (!stylusToReferenceTransformName.IsValid())
   {
     LOG_ERROR("The tool names (" << stylusName << ", " << referenceName << ") are invalid");
@@ -134,12 +137,12 @@ int main(int argc, char** argv)
   double stylusTipPositionInReferenceFrame[4] = {0, 0, 0, 1};
   for (unsigned int frame = 0; frame < trackedFrameList->GetNumberOfTrackedFrames(); ++frame)
   {
-    PlusTrackedFrame* trackedFrame = trackedFrameList->GetTrackedFrame(frame);
+    igsioTrackedFrame* trackedFrame = trackedFrameList->GetTrackedFrame(frame);
     transformRepository->SetTransforms(*trackedFrame);
     vtkSmartPointer<vtkMatrix4x4> stylusToReferenceTransform = vtkSmartPointer<vtkMatrix4x4>::New();
-    bool valid = false;
-    transformRepository->GetTransform(stylusToReferenceTransformName, stylusToReferenceTransform, &valid);
-    if (!valid)
+    ToolStatus status(TOOL_INVALID);
+    transformRepository->GetTransform(stylusToReferenceTransformName, stylusToReferenceTransform, &status);
+    if (status != TOOL_OK)
     {
       // There is no available transform for this frame; skip that frame
       continue;

@@ -7,7 +7,7 @@ See License.txt for details.
 // Local includes
 #include "QStylusCalibrationToolbox.h"
 #include "fCalMainWindow.h"
-#include "PlusMath.h"
+#include "igsioMath.h"
 #include "vtkPlusPivotCalibrationAlgo.h"
 #include "vtkPlusVisualizationController.h"
 
@@ -72,8 +72,10 @@ void QStylusCalibrationToolbox::OnActivated()
       initializationSuccess = false;
     }
     // Check if stylus to reference transform is available
+    std::string objectMarkerCoordinateFrame = m_PivotCalibration->GetObjectMarkerCoordinateFrame();
+    std::string referenceCoordinateFrame = m_PivotCalibration->GetReferenceCoordinateFrame();
     if (initializationSuccess && m_ParentMainWindow->GetVisualizationController()->IsExistingTransform(
-          m_PivotCalibration->GetObjectMarkerCoordinateFrame(), m_PivotCalibration->GetReferenceCoordinateFrame()) != PLUS_SUCCESS)
+      objectMarkerCoordinateFrame.c_str(), referenceCoordinateFrame.c_str()) != PLUS_SUCCESS)
     {
       LOG_ERROR("No transform found between stylus and reference!");
       initializationSuccess = false;
@@ -166,15 +168,16 @@ void QStylusCalibrationToolbox::RefreshContent()
   {
     // Get stylus tip position and display it
     std::string stylusTipPosition;
-    bool valid = false;
-    if (m_ParentMainWindow->GetVisualizationController()->GetTransformTranslationString(
-          m_PivotCalibration->GetObjectPivotPointCoordinateFrame(), m_PivotCalibration->GetReferenceCoordinateFrame(), stylusTipPosition, &valid) != PLUS_SUCCESS)
+    ToolStatus status(TOOL_INVALID);
+    std::string objectPivotPointCoordinateFrame = m_PivotCalibration->GetObjectPivotPointCoordinateFrame();
+    std::string referenceCoordinateFrame = m_PivotCalibration->GetReferenceCoordinateFrame();
+    if (m_ParentMainWindow->GetVisualizationController()->GetTransformTranslationString(objectPivotPointCoordinateFrame.c_str(), referenceCoordinateFrame.c_str(), stylusTipPosition, &status) != PLUS_SUCCESS)
     {
       LOG_ERROR("Unable to get stylus tip to reference transform!");
       return;
     }
 
-    if (valid)
+    if (status == TOOL_OK)
     {
       ui.label_CurrentPosition->setText(QString(stylusTipPosition.c_str()));
     }
@@ -205,16 +208,19 @@ void QStylusCalibrationToolbox::SetDisplayAccordingToState()
     // Enable or disable the image manipulation menu
     m_ParentMainWindow->SetImageManipulationMenuEnabled(m_ParentMainWindow->GetVisualizationController()->Is2DMode());
 
+    std::string objectPivotPointCoordinateFrame = m_PivotCalibration->GetObjectPivotPointCoordinateFrame();
+    std::string objectMarkerCoordinateFrame = m_PivotCalibration->GetObjectMarkerCoordinateFrame();
+
     // Update state message according to available transforms
-    if (m_PivotCalibration->GetObjectPivotPointCoordinateFrame() && m_PivotCalibration->GetObjectMarkerCoordinateFrame())
+    if (!objectPivotPointCoordinateFrame.empty() && !objectMarkerCoordinateFrame.empty())
     {
       std::string stylusTipToStylusTransformNameStr;
-      PlusTransformName stylusTipToStylusTransformName(
+      igsioTransformName stylusTipToStylusTransformName(
         m_PivotCalibration->GetObjectPivotPointCoordinateFrame(), m_PivotCalibration->GetObjectMarkerCoordinateFrame());
       stylusTipToStylusTransformName.GetTransformName(stylusTipToStylusTransformNameStr);
 
       if (m_ParentMainWindow->GetVisualizationController()->IsExistingTransform(
-            m_PivotCalibration->GetObjectPivotPointCoordinateFrame(), m_PivotCalibration->GetObjectMarkerCoordinateFrame(), false) == PLUS_SUCCESS)
+            objectPivotPointCoordinateFrame.c_str(), objectMarkerCoordinateFrame.c_str(), false) == PLUS_SUCCESS)
       {
         std::string date, errorStr;
         double error;
@@ -360,11 +366,12 @@ void QStylusCalibrationToolbox::SetDisplayAccordingToState()
     ui.pushButton_StartStop->setText("Start");
     ui.spinBox_NumberOfStylusCalibrationPoints->setEnabled(true);
 
+    std::string pivotPointToMarkerTranslationString = m_PivotCalibration->GetPivotPointToMarkerTranslationString();
     ui.label_NumberOfPoints->setText(QString("%1 / %2").arg(m_CurrentPointNumber).arg(m_NumberOfPoints));
-    ui.label_CalibrationError->setText(QString("%1 mm").arg(m_PivotCalibration->GetCalibrationError(), 2));
+    ui.label_CalibrationError->setText(QString("%1 mm").arg(m_PivotCalibration->GetPivotCalibrationErrorMm(), 2));
     ui.label_CurrentPositionText->setText(tr("Current stylus tip position (mm):"));
     ui.label_CurrentPosition->setText(m_StylusPositionString);
-    ui.label_StylusTipTransform->setText(m_PivotCalibration->GetPivotPointToMarkerTranslationString().c_str());
+    ui.label_StylusTipTransform->setText(pivotPointToMarkerTranslationString.c_str());
 
     m_ParentMainWindow->SetStatusBarText(QString(" Stylus calibration done"));
     m_ParentMainWindow->SetStatusBarProgress(-1);
@@ -527,15 +534,16 @@ void QStylusCalibrationToolbox::OnDataAcquired()
 
   // Get stylus position
   vtkSmartPointer<vtkMatrix4x4> stylusToReferenceTransformMatrix = vtkSmartPointer<vtkMatrix4x4>::New();
-  bool transformValid = false;
-  if (m_ParentMainWindow->GetVisualizationController()->GetTransformMatrix(
-        m_PivotCalibration->GetObjectMarkerCoordinateFrame(), m_PivotCalibration->GetReferenceCoordinateFrame(), stylusToReferenceTransformMatrix, &transformValid) != PLUS_SUCCESS)
+  ToolStatus status(TOOL_INVALID);
+  std::string objectMarkerCoordinateFrame = m_PivotCalibration->GetObjectMarkerCoordinateFrame();
+  std::string referenceCoordinateFrame = m_PivotCalibration->GetReferenceCoordinateFrame();
+  if (m_ParentMainWindow->GetVisualizationController()->GetTransformMatrix(objectMarkerCoordinateFrame.c_str(), referenceCoordinateFrame.c_str(), stylusToReferenceTransformMatrix, &status) != PLUS_SUCCESS)
   {
     LOG_ERROR("No transform found between stylus and reference!");
     return;
   }
 
-  if (!transformValid)
+  if (status != TOOL_OK)
   {
     return;
   }
@@ -564,8 +572,8 @@ void QStylusCalibrationToolbox::OnDataAcquired()
   else
   {
     // Compute position and orientation difference of current and previous positions
-    positionDifferenceMm = PlusMath::GetPositionDifference(stylusToReferenceTransformMatrix, m_PreviousStylusToReferenceTransformMatrix);
-    orientationDifferenceDegrees = PlusMath::GetOrientationDifference(stylusToReferenceTransformMatrix, m_PreviousStylusToReferenceTransformMatrix);
+    positionDifferenceMm = igsioMath::GetPositionDifference(stylusToReferenceTransformMatrix, m_PreviousStylusToReferenceTransformMatrix);
+    orientationDifferenceDegrees = igsioMath::GetOrientationDifference(stylusToReferenceTransformMatrix, m_PreviousStylusToReferenceTransformMatrix);
   }
 
   // If current point is close to the previous one, or too far (outlier), we do not insert it

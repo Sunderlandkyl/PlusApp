@@ -9,6 +9,7 @@ See License.txt for details.
 
 // PlusLib includes
 #include <vtkPlusDevice.h>
+#include <PlusFidSegmentation.h>
 
 // VTK includes
 #include <vtkConeSource.h>
@@ -252,38 +253,38 @@ PlusStatus vtkPlusImageVisualizer::UpdateOrientationMarkerLabelling()
   // Change the letters on the display to indicate the new orientation
   switch (this->CurrentMarkerOrientation)
   {
-    case US_IMG_ORIENT_MF:
-      this->HorizontalOrientationTextActor->SetInput("M");
-      this->VerticalOrientationTextActor->SetInput("F");
-      break;
-    case US_IMG_ORIENT_MN:
-      this->HorizontalOrientationTextActor->SetInput("M");
-      this->VerticalOrientationTextActor->SetInput("N");
-      break;
-    case US_IMG_ORIENT_UN:
-      this->HorizontalOrientationTextActor->SetInput("U");
-      this->VerticalOrientationTextActor->SetInput("N");
-      break;
-    case US_IMG_ORIENT_UF:
-      this->HorizontalOrientationTextActor->SetInput("U");
-      this->VerticalOrientationTextActor->SetInput("F");
-      break;
-    case US_IMG_ORIENT_FM:
-      this->HorizontalOrientationTextActor->SetInput("F");
-      this->VerticalOrientationTextActor->SetInput("M");
-      break;
-    case US_IMG_ORIENT_FU:
-      this->HorizontalOrientationTextActor->SetInput("F");
-      this->VerticalOrientationTextActor->SetInput("U");
-      break;
-    case US_IMG_ORIENT_NM:
-      this->HorizontalOrientationTextActor->SetInput("N");
-      this->VerticalOrientationTextActor->SetInput("M");
-      break;
-    case US_IMG_ORIENT_NU:
-      this->HorizontalOrientationTextActor->SetInput("N");
-      this->VerticalOrientationTextActor->SetInput("U");
-      break;
+  case US_IMG_ORIENT_MF:
+    this->HorizontalOrientationTextActor->SetInput("M");
+    this->VerticalOrientationTextActor->SetInput("F");
+    break;
+  case US_IMG_ORIENT_MN:
+    this->HorizontalOrientationTextActor->SetInput("M");
+    this->VerticalOrientationTextActor->SetInput("N");
+    break;
+  case US_IMG_ORIENT_UN:
+    this->HorizontalOrientationTextActor->SetInput("U");
+    this->VerticalOrientationTextActor->SetInput("N");
+    break;
+  case US_IMG_ORIENT_UF:
+    this->HorizontalOrientationTextActor->SetInput("U");
+    this->VerticalOrientationTextActor->SetInput("F");
+    break;
+  case US_IMG_ORIENT_FM:
+    this->HorizontalOrientationTextActor->SetInput("F");
+    this->VerticalOrientationTextActor->SetInput("M");
+    break;
+  case US_IMG_ORIENT_FU:
+    this->HorizontalOrientationTextActor->SetInput("F");
+    this->VerticalOrientationTextActor->SetInput("U");
+    break;
+  case US_IMG_ORIENT_NM:
+    this->HorizontalOrientationTextActor->SetInput("N");
+    this->VerticalOrientationTextActor->SetInput("M");
+    break;
+  case US_IMG_ORIENT_NU:
+    this->HorizontalOrientationTextActor->SetInput("N");
+    this->VerticalOrientationTextActor->SetInput("U");
+    break;
   }
 
   return PLUS_SUCCESS;
@@ -301,7 +302,7 @@ PlusStatus vtkPlusImageVisualizer::UpdateCameraPose()
   }
 
   // Calculate image center
-  int dimensions[3] = {0, 0, 0};
+  FrameSizeType dimensions = {0, 0, 0};
   this->SelectedChannel->GetBrightnessFrameSize(dimensions);
   double imageCenterX = dimensions[0] / 2.0;
   double imageCenterY = dimensions[1] / 2.0;
@@ -338,7 +339,7 @@ PlusStatus vtkPlusImageVisualizer::UpdateCameraPose()
   double cameraPos[3] = {imageCenterX, imageCenterY, -MAX_WIDGET_THICKNESS - 1};
   switch (this->CurrentMarkerOrientation)
   {
-    case US_IMG_ORIENT_UN:
+  case US_IMG_ORIENT_UN:
     {
       //Unmarked, near
       this->ImageCamera->SetRoll(0);
@@ -348,7 +349,7 @@ PlusStatus vtkPlusImageVisualizer::UpdateCameraPose()
       }
     }
     break;
-    case US_IMG_ORIENT_UF:
+  case US_IMG_ORIENT_UF:
     {
       // Unmarked, far
       this->ImageCamera->SetRoll(-180);
@@ -358,7 +359,7 @@ PlusStatus vtkPlusImageVisualizer::UpdateCameraPose()
       }
     }
     break;
-    case US_IMG_ORIENT_MF:
+  case US_IMG_ORIENT_MF:
     {
       // Marked, far
       this->ImageCamera->SetRoll(-180);
@@ -368,7 +369,7 @@ PlusStatus vtkPlusImageVisualizer::UpdateCameraPose()
       }
     }
     break;
-    case US_IMG_ORIENT_MN:
+  case US_IMG_ORIENT_MN:
     {
       // Marked, near
       this->ImageCamera->SetRoll(0);
@@ -398,14 +399,14 @@ PlusStatus vtkPlusImageVisualizer::SetScreenRightDownAxesOrientation(US_IMAGE_OR
 
   this->CurrentMarkerOrientation = aOrientation;
 
-  vtkXMLDataElement* renderingParameters = PlusXmlUtils::GetNestedElementWithName(vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationData(), "Rendering");
+  vtkXMLDataElement* renderingParameters = igsioXmlUtils::GetNestedElementWithName(vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationData(), "Rendering");
   if (renderingParameters == NULL)
   {
     LOG_ERROR("No Rendering element is found in the XML tree!");
     return PLUS_FAIL;
   }
 
-  std::string orientationValue = PlusVideoFrame::GetStringFromUsImageOrientation(aOrientation);
+  std::string orientationValue = igsioCommon::GetStringFromUsImageOrientation(aOrientation);
   renderingParameters->SetAttribute("DisplayedImageOrientation", orientationValue.c_str());
 
   return UpdateCameraPose();
@@ -576,7 +577,7 @@ PlusStatus vtkPlusImageVisualizer::UpdateScreenAlignedActors()
     return PLUS_SUCCESS;
   }
 
-  int dimensions[3] = {0, 0, 0};
+  FrameSizeType dimensions = {0, 0, 0};
   this->SelectedChannel->GetBrightnessFrameSize(dimensions);
 
   vtkCollectionSimpleIterator pit;
@@ -601,30 +602,30 @@ PlusStatus vtkPlusImageVisualizer::UpdateScreenAlignedActors()
     double newPosition[3] = {0};
     switch (this->CurrentMarkerOrientation)
     {
-      case US_IMG_ORIENT_MF:
-        newPosition[0] = originalPosition[0];
-        newPosition[1] = originalPosition[1];
-        newPosition[2] = originalPosition[2];
-        break;
-      case US_IMG_ORIENT_MN:
-        prop->RotateX(180);
-        newPosition[0] = originalPosition[0];
-        newPosition[1] = dimensions[1] - originalPosition[1];
-        newPosition[2] = -originalPosition[2];
-        break;
-      case US_IMG_ORIENT_UN:
-        prop->RotateX(180);
-        prop->RotateY(180);
-        newPosition[0] = dimensions[0] - originalPosition[0];
-        newPosition[1] = dimensions[1] - originalPosition[1];
-        newPosition[2] = originalPosition[2];
-        break;
-      case US_IMG_ORIENT_UF:
-        prop->RotateY(180);
-        newPosition[0] = dimensions[0] - originalPosition[0];
-        newPosition[1] = originalPosition[1];
-        newPosition[2] = -originalPosition[2];
-        break;
+    case US_IMG_ORIENT_MF:
+      newPosition[0] = originalPosition[0];
+      newPosition[1] = originalPosition[1];
+      newPosition[2] = originalPosition[2];
+      break;
+    case US_IMG_ORIENT_MN:
+      prop->RotateX(180);
+      newPosition[0] = originalPosition[0];
+      newPosition[1] = dimensions[1] - originalPosition[1];
+      newPosition[2] = -originalPosition[2];
+      break;
+    case US_IMG_ORIENT_UN:
+      prop->RotateX(180);
+      prop->RotateY(180);
+      newPosition[0] = dimensions[0] - originalPosition[0];
+      newPosition[1] = dimensions[1] - originalPosition[1];
+      newPosition[2] = originalPosition[2];
+      break;
+    case US_IMG_ORIENT_UF:
+      prop->RotateY(180);
+      newPosition[0] = dimensions[0] - originalPosition[0];
+      newPosition[1] = originalPosition[1];
+      newPosition[2] = -originalPosition[2];
+      break;
     }
 
     prop->SetPosition(newPosition);
@@ -633,22 +634,22 @@ PlusStatus vtkPlusImageVisualizer::UpdateScreenAlignedActors()
   // Now update the member variables so that future rotations correctly undo the current rotations
   switch (this->CurrentMarkerOrientation)
   {
-    case US_IMG_ORIENT_MF:
-      this->ScreenAlignedCurrentXRotation = 0;
-      this->ScreenAlignedCurrentYRotation = 0;
-      break;
-    case US_IMG_ORIENT_MN:
-      this->ScreenAlignedCurrentYRotation = 0;
-      this->ScreenAlignedCurrentXRotation = 180;
-      break;
-    case US_IMG_ORIENT_UN:
-      this->ScreenAlignedCurrentXRotation = 180.0;
-      this->ScreenAlignedCurrentYRotation = 180.0;
-      break;
-    case US_IMG_ORIENT_UF:
-      this->ScreenAlignedCurrentYRotation = 180.0;
-      this->ScreenAlignedCurrentXRotation = 0;
-      break;
+  case US_IMG_ORIENT_MF:
+    this->ScreenAlignedCurrentXRotation = 0;
+    this->ScreenAlignedCurrentYRotation = 0;
+    break;
+  case US_IMG_ORIENT_MN:
+    this->ScreenAlignedCurrentYRotation = 0;
+    this->ScreenAlignedCurrentXRotation = 180;
+    break;
+  case US_IMG_ORIENT_UN:
+    this->ScreenAlignedCurrentXRotation = 180.0;
+    this->ScreenAlignedCurrentYRotation = 180.0;
+    break;
+  case US_IMG_ORIENT_UF:
+    this->ScreenAlignedCurrentYRotation = 180.0;
+    this->ScreenAlignedCurrentXRotation = 0;
+    break;
   }
 
   return PLUS_SUCCESS;
@@ -661,17 +662,17 @@ PlusStatus vtkPlusImageVisualizer::ReadRoiConfiguration(vtkXMLDataElement* aXMLE
   vtkXMLDataElement* segmentationParameters = aXMLElement->FindNestedElementWithName("Segmentation");
   if (segmentationParameters == NULL)
   {
-    LOG_WARNING("No Segmentation element is found in the XML tree!");
-    this->EnableROI(false);
-    return PLUS_FAIL;
+    LOG_WARNING("No Segmentation element is found in the XML tree! Using default values");
+    segmentationParameters = igsioXmlUtils::GetNestedElementWithName(aXMLElement, "Segmentation");
+    PlusFidSegmentation::SetDefaultSegmentationParameters(segmentationParameters);
   }
   // clipping parameters
-  int clipRectangleOrigin[2] = { -1, -1};
+  int clipRectangleOrigin[3] = {igsioCommon::NO_CLIP, igsioCommon::NO_CLIP, igsioCommon::NO_CLIP};
   if (!segmentationParameters->GetVectorAttribute("ClipRectangleOrigin", 2, clipRectangleOrigin))
   {
     LOG_WARNING("Cannot find ClipRectangleOrigin attribute in the segmentation parameters section of the configuration, region of interest will not be displayed");
   }
-  int clipRectangleSize[2] = { -1, -1};
+  int clipRectangleSize[3] = { igsioCommon::NO_CLIP, igsioCommon::NO_CLIP, igsioCommon::NO_CLIP };
   if (!segmentationParameters->GetVectorAttribute("ClipRectangleSize", 2, clipRectangleSize))
   {
     LOG_WARNING("Cannot find ClipRectangleSize attribute in the segmentation parameters section of the configuration, region of interest will not be displayed");
@@ -705,7 +706,11 @@ PlusStatus vtkPlusImageVisualizer::ReadConfiguration(vtkXMLDataElement* aConfig)
 
   // Displayed image orientation
   const char* orientation = xmlElement->GetAttribute("DisplayedImageOrientation");
-  US_IMAGE_ORIENTATION orientationValue = PlusVideoFrame::GetUsImageOrientationFromString(orientation);
+  US_IMAGE_ORIENTATION orientationValue = US_IMG_ORIENT_XX;
+  if (orientation != nullptr)
+  {
+    orientationValue = igsioCommon::GetUsImageOrientationFromString(orientation);
+  }
   if (orientationValue == US_IMG_ORIENT_XX)
   {
     LOG_WARNING("Unable to read image orientation from configuration file (Rendering tag, DisplayedImageOrientation attribute). Defauting to MF.");

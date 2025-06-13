@@ -11,11 +11,9 @@ configuration file, etc. Requests are received through OpenIGTLink commands. See
 
 \section ApplicationPlusServerUsage Usage
 
-The most convenient way to launch PlusServer is to install Plus Applications package and run
-the Plus Server from the start menu. Then select a configuration file (e.g.,
-"PlusServer: Replay fCal phantom scan ...") and click Connect.
-
-\image html ApplicationPlusServerLauncher.png
+The most convenient way to launch PlusServer is using PlusServerLauncher.
+After installing the Plus Applications package, the Plus Server Launcher can be found from the start menu.
+See more details at \subpage ApplicationPlusServerLauncher .
 
 \subsection ApplicationPlusServerUsageVisualization Visualization of acquired data
 
@@ -29,14 +27,6 @@ To visualize the images and transforms broadcasted by the PlusServer use an appl
 \subsection ApplicationPlusServerUsageCommandLine Command-line usage
 
 PlusServer can be also started from the command-line. The list of available command-line parameters are printed if the --help parameter is specified.
-
-Launch the server with the last used device set and connect:
-
-    PlusServerLauncher --connect
-
-Launch the server with a specified device set and connect:
-
-    PlusServerLauncher --connect --config-file=PlusDeviceSet_Server_Sim_NwirePhantom.xml
 
 Launch the command-line-only version of PlusServer (no graphical user interface):
 
@@ -56,7 +46,7 @@ Launch the command-line-only version of PlusServer (no graphical user interface)
   --verbose=opt                       Verbose level (1=error only, 2=warning,
                                       3=info, 4=debug)
 ~~~
- 
+
 \section ApplicationPlusServerConfigSettings Configuration settings
 
 - \xmlElem \b PlusOpenIGTLinkServer
@@ -69,14 +59,14 @@ Launch the command-line-only version of PlusServer (no graphical user interface)
   - \xmlAtt SendColumnMajorTransforms If \c TRUE then transforms will be sent in column major format. If \c FALSE then transforms will be sent in row major format. \OptionalAtt{TRUE}
   - \xmlAtt NumberOfRetryAttempts The number of retry attempts to perform when a message cannot be sent before considering them disconnected \OptionalAtt{10}
   - \xmlAtt DelayBetweenRetryAttemptsSec The delay between each retry attempt. In combination with NumberOfRetryAttemps this determines how long to wait before considering a client disconnected. \OptionalAtt{0.05}
-  - \xmlAtt DefaultClientSendTimeoutSec If set, this value is used to determine how long to wait before considering a pending send message a timeout. \OptionalAtt{0.5}
-  - \xmlAtt DefaultClientReceiveTimeoutSec If set, this value is used to determine how long to wait before considering no network input as a timeout. \OptionalAtt{0.5}
+  - \xmlAtt DefaultClientSendTimeoutSec If set, this value is used to determine how long to wait before considering a pending send message a timeout. A value of 0 means no timeout. \OptionalAtt{0.5}
+  - \xmlAtt DefaultClientReceiveTimeoutSec If set, this value is used to determine how long to wait before considering no network input as a timeout. A value of 0 means no timeout. \OptionalAtt{0.5}
   - \xmlAtt IgtlMessageCrcCheckEnabled If \c TRUE then incoming OpenIGTLink messages are only accepted if their CRC is valid. If \c FALSE then CRC is not checked. \OptionalAtt{FALSE}
   - \xmlAtt LogWarningOnNoDataAvailable If TRUE, a warning will be logged when no data is available yet. \OptionalAtt{TRUE}
   - \xmlAtt KeepAliveIntervalSec The time to wait between sending keep alive messages \OptionalAtt{0.25}
   - \xmlElem \b DefaultClientInfo
     - \xmlAtt TDATARequested For clients that have the TDATA message type requested, this parameter can control default sending of data on startup. \OptionalAtt{FALSE}
-    - \xmlAtt Resolution For TDATA messages, the minimum time between two frames. Use 0 for as fast as possible. If e.g. 50 ms is specified, the maximum update rate will be 20 Hz. \OptionalAtt{0}
+    - \xmlAtt TDATAResolution For TDATA messages, the minimum time between two frames. Use 0 for as fast as possible. If e.g. 50 ms is specified, the maximum update rate will be 20 Hz. \OptionalAtt{0}
     - \xmlElem \b MessageTypes
       - \xmlElem \b Message
         - \xmlAtt Type
@@ -86,33 +76,47 @@ Launch the command-line-only version of PlusServer (no graphical user interface)
           - \c TRACKEDFRAME: Plus tracked ultrasound frame, stores all frame fields (tool transforms, statuses, etc). Optionally, sent transforms can be customized using the \c TransformNames list.
           - \c USMESSAGE: <a href="https://musiic.lcsr.jhu.edu/Main_Page">MUSiiC</a> tracked ultrasound frame, stores additional imaging information, such as transmit and sampling frequency, line density, steering angle
           - \c STRING: standard OpenIGTLink message type, stores a simple character string
+          - \c VIDEO: standard OpenIGTLink message type, stores a compressed video frame
     - \xmlElem \b TransformNames
       - \xmlElem \b Transform
           - \xmlAtt Name
     - \xmlElem \b StringNames
-      - \xmlElem \b String Name of the custom frame string that is sent as a STRING message. Any frame field (Timestamp, any status message, any custom frame fields) can be specified here.
+      - \xmlElem \b String Name of the frame string that is sent as a STRING message. Any frame field (Timestamp, any status message, any frame fields) can be specified here.
     - \xmlElem \b ImageNames
       - \xmlElem \b Image
           - \xmlAtt Name Name of the image stream. It also defines the "From" frame of the transform embedded in the IGTL image message.
           - \xmlAtt EmbeddedTransformToFrame "To" frame of the transform embedded in the IGTL image message
+    - \xmlElem \b VideoNames
+      - \xmlElem \b Video
+          - \xmlAtt Name Name of the image stream. It also defines the "From" frame of the transform embedded in the IGTL image message.
+          - \xmlAtt EmbeddedTransformToFrame "To" frame of the transform embedded in the IGTL image message
+          - \xmlElem \b Encoding
+            - \xmlAtt FourCC FourCC value of the codec that is used to encode the image as a VideoMessage. Available types: I420: "I420", VP9:"VP90" \OptionalAtt{VP90}
+            - \xmlAtt Lossless If TRUE, encoding will be performed losslessly if possible. \OptionalAtt{FALSE}
+            - \xmlAtt MinKeyframeDistance The minimum required distance between encoded keyframes. \OptionalAtt{-1}
+            - \xmlAtt MaxKeyframeDistance The maximum required distance between encoded keyframes. \OptionalAtt{-1}
+            - \xmlAtt Speed The encoding speed for the encoder. \OptionalAtt{8}
+            - \xmlAtt DeadlineMode The deadline mode for the encoder. Possible values: "REALTIME", "GOOD", "BEST". \OptionalAtt{REALTIME}
+            - \xmlAtt RateControl The rate control mode for the encoder. Possible values: "CBR" (Constant bit rate), "VBR" (Variable bit rate), "CQ" (Constrained quality), "Q" (Constant Quality). \OptionalAtt{Q}
+            - \xmlAtt TargetBitrate The target bitrate for the encoder. \OptionalAtt{-1}
 
 This is an example element that needs to be added to the PLUS configuration xml file to use PlusServer:
 
-    <PlusOpenIGTLinkServer 
-      MaxNumberOfIgtlMessagesToSend="10" 
-      MaxTimeSpentWithProcessingMs="50" 
-      ListeningPort="18944" 
+    <PlusOpenIGTLinkServer
+      MaxNumberOfIgtlMessagesToSend="10"
+      MaxTimeSpentWithProcessingMs="50"
+      ListeningPort="18944"
       MissingInputGracePeriodSec="5.0"
-      SendValidTransformsOnly="TRUE" 
-      OutputChannelId="SomeValidChannel" > 
-      <DefaultClientInfo> 
-        <MessageTypes> 
+      SendValidTransformsOnly="TRUE"
+      OutputChannelId="SomeValidChannel" >
+      <DefaultClientInfo>
+        <MessageTypes>
           <Message Type="IMAGE" />
           <Message Type="TRANSFORM" />
         </MessageTypes>
         <TransformNames>
-          <Transform Name="StylusTipToReference" /> 
-          <Transform Name="ProbeToReference" /> 
+          <Transform Name="StylusTipToReference" />
+          <Transform Name="ProbeToReference" />
         </TransformNames>
       </DefaultClientInfo>
     </PlusOpenIGTLinkServer>

@@ -14,9 +14,11 @@ See License.txt for details.
 #include <QFileDialog>
 #include <QTimer>
 
+// IGSIO includes
+#include <vtkIGSIOAccurateTimer.h>
+
 // PlusLib includes
-#include <PlusMath.h>
-#include <vtkPlusAccurateTimer.h>
+#include <igsioMath.h>
 #include <vtkPlusFakeTracker.h>
 #include <vtkPlusLandmarkDetectionAlgo.h>
 #include <vtkPlusPhantomLandmarkRegistrationAlgo.h>
@@ -58,7 +60,11 @@ QPhantomRegistrationToolbox::QPhantomRegistrationToolbox(fCalMainWindow* aParent
   m_PhantomRenderer->SetBackground2(0.4, 0.4, 0.4);
   m_PhantomRenderer->SetGradientBackground(true);
 
+#if VTK_MAJOR_VERSION < 9
   ui.canvasPhantom->GetRenderWindow()->AddRenderer(m_PhantomRenderer);
+#else
+  ui.canvasPhantom->renderWindow()->AddRenderer(m_PhantomRenderer);
+#endif
 
   // Initialize requested landmarks visualization in toolbox canvas
   m_RequestedLandmarkPolyData->Initialize();
@@ -94,7 +100,11 @@ QPhantomRegistrationToolbox::QPhantomRegistrationToolbox(fCalMainWindow* aParent
 //-----------------------------------------------------------------------------
 QPhantomRegistrationToolbox::~QPhantomRegistrationToolbox()
 {
+#if VTK_MAJOR_VERSION < 9
   ui.canvasPhantom->GetRenderWindow()->RemoveRenderer(m_PhantomRenderer);
+#else
+  ui.canvasPhantom->renderWindow()->RemoveRenderer(m_PhantomRenderer);
+#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -312,21 +322,51 @@ void QPhantomRegistrationToolbox::RefreshContent()
   {
     // Get stylus tip position and display it
     std::string stylusTipPosition;
-    bool valid = false;
-    if (m_ParentMainWindow->GetVisualizationController()->GetTransformTranslationString(m_PhantomLandmarkRegistration->GetStylusTipCoordinateFrame(),
-        m_PhantomLandmarkRegistration->GetReferenceCoordinateFrame(), stylusTipPosition, &valid) != PLUS_SUCCESS)
+    ToolStatus status(TOOL_INVALID);
+    if (m_ParentMainWindow->GetVisualizationController()->GetTransformTranslationString(m_PhantomLandmarkRegistration->GetStylusTipCoordinateFrame(), m_PhantomLandmarkRegistration->GetReferenceCoordinateFrame(), stylusTipPosition, &status) != PLUS_SUCCESS)
     {
       LOG_ERROR("Unable to get stylus tip to reference transform!");
       return;
     }
 
-    if (valid)
+    switch (status)
     {
-      ui.label_StylusPositionText->setText(QString(stylusTipPosition.c_str()));
-    }
-    else
-    {
-      ui.label_StylusPositionText->setText(tr("Stylus is out of view"));
+      default:
+      case TOOL_UNKNOWN:
+        {
+          ui.label_StylusPositionText->setText(tr("Unknown error."));
+        }
+      case TOOL_OK:
+      case TOOL_SWITCH1_IS_ON:
+      case TOOL_SWITCH2_IS_ON:
+      case TOOL_SWITCH3_IS_ON:
+        {
+          ui.label_StylusPositionText->setText(QString(stylusTipPosition.c_str()));
+        }
+      case TOOL_MISSING:
+        {
+          ui.label_StylusPositionText->setText(tr("Stylus is missing"));
+        }
+      case TOOL_OUT_OF_VIEW:
+        {
+          ui.label_StylusPositionText->setText(tr("Stylus is out of view"));
+        }
+      case TOOL_OUT_OF_VOLUME:
+        {
+          ui.label_StylusPositionText->setText(tr("Stylus is out of volume"));
+        }
+      case TOOL_REQ_TIMEOUT:
+        {
+          ui.label_StylusPositionText->setText(tr("Stylus request timed out"));
+        }
+      case TOOL_INVALID:
+        {
+          ui.label_StylusPositionText->setText(tr("Stylus is invalid"));
+        }
+      case TOOL_PATH_NOT_FOUND:
+        {
+          ui.label_StylusPositionText->setText(tr("Stylus cannot be calculated from given inputs"));
+        }
     }
   }
 
@@ -360,7 +400,7 @@ void QPhantomRegistrationToolbox::SetDisplayAccordingToState()
           m_PhantomLandmarkRegistration->GetReferenceCoordinateFrame()) == PLUS_SUCCESS)
       {
         std::string phantomToReferenceTransformNameStr;
-        PlusTransformName phantomToReferenceTransformName(
+        igsioTransformName phantomToReferenceTransformName(
           m_PhantomLandmarkRegistration->GetPhantomCoordinateFrame(), m_PhantomLandmarkRegistration->GetReferenceCoordinateFrame());
         phantomToReferenceTransformName.GetTransformName(phantomToReferenceTransformNameStr);
 
@@ -591,7 +631,7 @@ PlusStatus QPhantomRegistrationToolbox::Start()
   }
 
   vtkPlusDataCollector* dataCollector = m_ParentMainWindow->GetVisualizationController()->GetDataCollector();
-  m_LandmarkDetection->SetMinimunDistanceBetweenLandmarksMm(m_PhantomLandmarkRegistration->GetMinimunDistanceBetweenTwoLandmarksMm());
+  m_LandmarkDetection->SetMinimumDistanceBetweenLandmarksMm(m_PhantomLandmarkRegistration->GetMinimunDistanceBetweenTwoLandmarksMm());
 
   if (dataCollector)
   {
@@ -646,15 +686,15 @@ void QPhantomRegistrationToolbox::OpenStylusCalibration()
   }
 
   // Read stylus calibration transform
-  PlusTransformName stylusTipToStylusTransformName(m_PhantomLandmarkRegistration->GetStylusTipCoordinateFrame(), pivotCalibrationAlgo->GetObjectMarkerCoordinateFrame());
+  igsioTransformName stylusTipToStylusTransformName(m_PhantomLandmarkRegistration->GetStylusTipCoordinateFrame(), pivotCalibrationAlgo->GetObjectMarkerCoordinateFrame());
 
   vtkSmartPointer<vtkMatrix4x4> stylusTipToStylusTransformMatrix = vtkSmartPointer<vtkMatrix4x4>::New();
   std::string transformDate;
   double transformError = 0.0;
-  bool valid = false;
-  vtkPlusTransformRepository* tempTransformRepo = vtkPlusTransformRepository::New();
+  ToolStatus status(TOOL_INVALID);
+  vtkIGSIOTransformRepository* tempTransformRepo = vtkIGSIOTransformRepository::New();
   if (tempTransformRepo->ReadConfiguration(vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationData()) != PLUS_SUCCESS
-      || tempTransformRepo->GetTransform(stylusTipToStylusTransformName, stylusTipToStylusTransformMatrix, &valid) != PLUS_SUCCESS
+      || tempTransformRepo->GetTransform(stylusTipToStylusTransformName, stylusTipToStylusTransformMatrix, &status) != PLUS_SUCCESS
       || tempTransformRepo->GetTransformDate(stylusTipToStylusTransformName, transformDate) != PLUS_SUCCESS
       || tempTransformRepo->GetTransformError(stylusTipToStylusTransformName, transformError) != PLUS_SUCCESS)
   {
@@ -667,7 +707,7 @@ void QPhantomRegistrationToolbox::OpenStylusCalibration()
   tempTransformRepo->Delete();
   pivotCalibrationAlgo->Delete();
 
-  if (valid)
+  if (status == TOOL_OK)
   {
     if (m_ParentMainWindow->GetVisualizationController()->GetTransformRepository()->SetTransform(stylusTipToStylusTransformName, stylusTipToStylusTransformMatrix) != PLUS_SUCCESS)
     {
@@ -708,7 +748,7 @@ void QPhantomRegistrationToolbox::RecordPoint()
       {
         fakeTracker->SetCounter(m_CurrentLandmarkIndex);
         fakeTracker->SetTransformRepository(m_ParentMainWindow->GetVisualizationController()->GetTransformRepository());
-        vtkPlusAccurateTimer::Delay(2.1 / fakeTracker->GetAcquisitionRate());
+        vtkIGSIOAccurateTimer::Delay(2.1 / fakeTracker->GetAcquisitionRate());
         break;
       }
     }
@@ -716,16 +756,15 @@ void QPhantomRegistrationToolbox::RecordPoint()
 
   // Acquire point
   vtkSmartPointer<vtkMatrix4x4> stylusTipToReferenceTransformMatrix = vtkSmartPointer<vtkMatrix4x4>::New();
-  bool valid = false;
-  if (m_ParentMainWindow->GetVisualizationController()->GetTransformMatrix(m_PhantomLandmarkRegistration->GetStylusTipCoordinateFrame(), m_PhantomLandmarkRegistration->GetReferenceCoordinateFrame(),
-      stylusTipToReferenceTransformMatrix, &valid) != PLUS_SUCCESS)
+  ToolStatus status(TOOL_INVALID);
+  if (m_ParentMainWindow->GetVisualizationController()->GetTransformMatrix(m_PhantomLandmarkRegistration->GetStylusTipCoordinateFrame(), m_PhantomLandmarkRegistration->GetReferenceCoordinateFrame(), stylusTipToReferenceTransformMatrix, &status) != PLUS_SUCCESS)
   {
     LOG_ERROR("No transform found between stylus and reference!");
     return;
   }
 
   // Add point to registration algorithm
-  if (!valid)
+  if (status != TOOL_OK)
   {
     LOG_WARNING("Invalid stylus tip to reference transform - cannot be added!");
     return;
@@ -1113,16 +1152,15 @@ void QPhantomRegistrationToolbox::AddStylusTipTransformToLandmarkPivotingRegistr
 {
   LOG_TRACE("PhantomRegistrationToolbox::AddStylusTipPositionToLandmarkPivotingRegistration");
 
-  bool valid = false;
+  ToolStatus status(TOOL_INVALID);
   vtkSmartPointer<vtkMatrix4x4> stylusTipToReferenceTransformMatrix = vtkSmartPointer<vtkMatrix4x4>::New();
-  if (m_ParentMainWindow->GetVisualizationController()->GetTransformMatrix(m_PhantomLandmarkRegistration->GetStylusTipCoordinateFrame(), m_PhantomLandmarkRegistration->GetReferenceCoordinateFrame(),
-      stylusTipToReferenceTransformMatrix, &valid) != PLUS_SUCCESS)
+  if (m_ParentMainWindow->GetVisualizationController()->GetTransformMatrix(m_PhantomLandmarkRegistration->GetStylusTipCoordinateFrame(), m_PhantomLandmarkRegistration->GetReferenceCoordinateFrame(), stylusTipToReferenceTransformMatrix, &status) != PLUS_SUCCESS)
   {
     LOG_ERROR("No transform found between stylus tip and reference!");
     return;
   }
 
-  if (valid && ToolboxState_InProgress == GetState())
+  if (status == TOOL_OK && ToolboxState_InProgress == GetState())
   {
     double positionDifferenceLowThresholdMm = 2.0;
     double positionDifferenceHighThresholdMm = 500.0;
@@ -1140,8 +1178,8 @@ void QPhantomRegistrationToolbox::AddStylusTipTransformToLandmarkPivotingRegistr
     else
     {
       // Compute position and orientation difference of current and previous positions
-      positionDifferenceMm = PlusMath::GetPositionDifference(stylusTipToReferenceTransformMatrix, m_PreviousStylusTipToReferenceTransformMatrix);
-      orientationDifferenceDegrees = PlusMath::GetOrientationDifference(stylusTipToReferenceTransformMatrix, m_PreviousStylusTipToReferenceTransformMatrix);
+      positionDifferenceMm = igsioMath::GetPositionDifference(stylusTipToReferenceTransformMatrix, m_PreviousStylusTipToReferenceTransformMatrix);
+      orientationDifferenceDegrees = igsioMath::GetOrientationDifference(stylusTipToReferenceTransformMatrix, m_PreviousStylusTipToReferenceTransformMatrix);
     }
 
     if (positionDifferenceMm > positionDifferenceHighThresholdMm || orientationDifferenceDegrees > orientationDifferenceHighThresholdDegrees)
@@ -1251,15 +1289,14 @@ void QPhantomRegistrationToolbox::AddStylusTipTransformToLinearObjectRegistratio
 
   // Get stylus tip position
   vtkSmartPointer<vtkMatrix4x4> stylusTipToReferenceTransformMatrix = vtkSmartPointer<vtkMatrix4x4>::New();
-  bool valid = false;
-  if (m_ParentMainWindow->GetVisualizationController()->GetTransformMatrix(
-        m_PhantomLinearObjectRegistration->GetStylusTipCoordinateFrame(), m_PhantomLinearObjectRegistration->GetReferenceCoordinateFrame(), stylusTipToReferenceTransformMatrix, &valid) != PLUS_SUCCESS)
+  ToolStatus status(TOOL_INVALID);
+  if (m_ParentMainWindow->GetVisualizationController()->GetTransformMatrix(m_PhantomLinearObjectRegistration->GetStylusTipCoordinateFrame(), m_PhantomLinearObjectRegistration->GetReferenceCoordinateFrame(), stylusTipToReferenceTransformMatrix, &status) != PLUS_SUCCESS)
   {
     LOG_ERROR("No transform found between stylus tip and reference!");
     return;
   }
 
-  if (valid)
+  if (status == TOOL_OK)
   {
     // Assemble position string for toolbox
     std::stringstream ss;
@@ -1286,8 +1323,8 @@ void QPhantomRegistrationToolbox::AddStylusTipTransformToLinearObjectRegistratio
     else
     {
       // Compute position and orientation difference of current and previous positions
-      positionDifferenceMm = PlusMath::GetPositionDifference(stylusTipToReferenceTransformMatrix, m_PreviousStylusTipToReferenceTransformMatrix);
-      orientationDifferenceDegrees = PlusMath::GetOrientationDifference(stylusTipToReferenceTransformMatrix, m_PreviousStylusTipToReferenceTransformMatrix);
+      positionDifferenceMm = igsioMath::GetPositionDifference(stylusTipToReferenceTransformMatrix, m_PreviousStylusTipToReferenceTransformMatrix);
+      orientationDifferenceDegrees = igsioMath::GetOrientationDifference(stylusTipToReferenceTransformMatrix, m_PreviousStylusTipToReferenceTransformMatrix);
     }
 
     // If current point is close to the previous one, or too far (outlier), we do not insert it

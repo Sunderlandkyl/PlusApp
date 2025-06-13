@@ -12,7 +12,7 @@
 
 // PlusLib includes
 #include <PlusConfigure.h>
-#include <PlusTrackedFrame.h>
+#include <igsioTrackedFrame.h>
 
 // Qt includes
 #include <QDialog>
@@ -65,7 +65,7 @@ public:
   * \param Output array for image dimensions
   * \return Success flag
   */
-  PlusStatus GetFrameSize(int aImageDimensions[3]);
+  PlusStatus GetFrameSize(FrameSizeType& aImageDimensions);
 
   /*!
   * Set ROI values to spinBoxes (if a values is -1, it is not set - because usually only 2 values change at a time)
@@ -174,6 +174,11 @@ protected slots:
   * \param aEvent Resize event
   */
   virtual void resizeEvent(QResizeEvent* aEvent);
+
+  /*! 
+  * show event handler
+  */
+  virtual void showEvent(QShowEvent* aEvent);
 
   /*!
   * Slot catching refresh timer events and refreshing the canvas
@@ -340,7 +345,7 @@ protected:
   bool                                    m_ImageFrozen;
 
   /*! Tracked frame to hold the desired image to process*/
-  PlusTrackedFrame                        m_Frame;
+  igsioTrackedFrame                        m_Frame;
 
 protected:
   Ui::SegmentationParameterDialog ui;

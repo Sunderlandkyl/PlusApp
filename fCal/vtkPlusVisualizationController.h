@@ -8,26 +8,28 @@ See License.txt for details.
 #define __vtkVisualizationController_h
 
 // PlusLib includes
+#include <PlusConfigure.h>
 #include <PlusCommon.h>
-#include <PlusVideoFrame.h>
+#include <igsioVideoFrame.h>
 #include <vtkPlusDataCollector.h>
-#include <vtkPlusTransformRepository.h>
+#include <vtkIGSIOTransformRepository.h>
 
 // Qt includes
 #include <QObject>
 #include <QTimer>
 
-// VTK includes
-#include <QVTKWidget.h>
-
+// Local includes
 class vtkPlusImageVisualizer;
 class vtkPlus3DObjectVisualizer;
 class vtkPlusDisplayableObject;
 
+// VTK includes
+class QVTKOpenGLNativeWidget;
 class vtkImageActor;
 class vtkMatrix4x4;
 class vtkPolyData;
 class vtkPolyDataMapper;
+class vtkRenderWindow;
 class vtkRenderer;
 class vtkSTLReader;
 class vtkTransform;
@@ -136,33 +138,36 @@ public:
   * Return acquisition timer (to be able to connect actions to it)
   * \return Acquisition timer object
   */
-  QTimer& GetAcquisitionTimer() { return this->AcquisitionTimer; };
+  QTimer& GetAcquisitionTimer()
+  {
+    return this->AcquisitionTimer;
+  };
 
   /*!
   Acquire transform matrix from tracking and provide string containing the translation part
   /param aTransformTranslationString Out parameter for the position string
   /param aValid True if the transform is valid, false otherwise (optional parameter)
   */
-  PlusStatus GetTransformTranslationString(const char* aTransformFrom, const char* aTransformTo, std::string& aTransformTranslationString, bool* aValid = NULL);
+  PlusStatus GetTransformTranslationString(const char* aTransformFrom, const char* aTransformTo, std::string& aTransformTranslationString, ToolStatus* aStatus = NULL);
   /*!
   Acquire transform matrix from tracking and provide string containing the translation part
   /param aTransformTranslationString Out parameter for the position string
   /param aValid True if the transform is valid, false otherwise (optional parameter)
   */
-  PlusStatus GetTransformTranslationString(PlusTransformName aTransform, std::string& aTransformTranslationString, bool* aValid = NULL);
+  PlusStatus GetTransformTranslationString(igsioTransformName aTransform, std::string& aTransformTranslationString, ToolStatus* aStatus = NULL);
 
   /*!
   Acquire transform matrix from tracking
   /param aOutputMatrix Out parameter for the transform matrix
   /param aValid True if the transform is valid, false otherwise (optional parameter)
   */
-  PlusStatus GetTransformMatrix(const char* aTransformFrom, const char* aTransformTo, vtkMatrix4x4* aOutputMatrix, bool* aValid = NULL);
+  PlusStatus GetTransformMatrix(const char* aTransformFrom, const char* aTransformTo, vtkMatrix4x4* aOutputMatrix, ToolStatus* aStatus = NULL);
   /*!
   Acquire transform matrix from tracking
   /param aOutputMatrix Out parameter for the transform matrix
   /param aValid True if the transform is valid, false otherwise (optional parameter)
   */
-  PlusStatus GetTransformMatrix(PlusTransformName aTransform, vtkMatrix4x4* aOutputMatrix, bool* aValid = NULL);
+  PlusStatus GetTransformMatrix(igsioTransformName aTransform, vtkMatrix4x4* aOutputMatrix, ToolStatus* aStatus = NULL);
 
   /*!
   Check if a transform exists in transform repository
@@ -272,7 +277,7 @@ public:
   /*! toggle visibility of the line actor for the line segmentation result */
   void SetLineSegmentationVisible(bool _arg);
 
-  void SetCanvas(QVTKWidget* canvas);
+  void SetCanvas(QVTKOpenGLNativeWidget* canvas);
 
   void ClearResultPolyData();
   void ClearInputPolyData();
@@ -295,7 +300,7 @@ public:
   PlusStatus SetAcquisitionFrameRate(int aFrameRate);
   vtkGetMacro(AcquisitionFrameRate, int);
 
-  vtkGetObjectMacro(TransformRepository, vtkPlusTransformRepository);
+  vtkGetObjectMacro(TransformRepository, vtkIGSIOTransformRepository);
   vtkGetObjectMacro(DataCollector, vtkPlusDataCollector);
 
   vtkRenderer* GetCanvasRenderer();
@@ -306,12 +311,16 @@ public:
   void SetInputData(vtkImageData* input);
 
 protected:
-  vtkSetObjectMacro(TransformRepository, vtkPlusTransformRepository);
+  vtkSetObjectMacro(TransformRepository, vtkIGSIOTransformRepository);
   vtkSetObjectMacro(DataCollector, vtkPlusDataCollector);
 
   vtkImageActor* GetImageActor();
 
-  QVTKWidget* GetCanvas() { return Canvas; }
+  QVTKOpenGLNativeWidget* GetCanvas()
+  {
+    return Canvas;
+  }
+  vtkRenderWindow* GetRenderWindow();
 
 protected:
   /*!
@@ -344,8 +353,8 @@ protected:
   /*! Desired frame rate of synchronized recording */
   int                                         AcquisitionFrameRate;
   /// Cached variables from other systems
-  QVTKWidget*                                 Canvas;
-  vtkPlusTransformRepository*                 TransformRepository;
+  QVTKOpenGLNativeWidget*                     Canvas;
+  vtkIGSIOTransformRepository*                TransformRepository;
   vtkPlusChannel*                             SelectedChannel;
   vtkPlusDataCollector*                       DataCollector;
 };

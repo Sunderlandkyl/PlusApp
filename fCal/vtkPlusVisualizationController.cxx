@@ -10,13 +10,12 @@ See License.txt for details.
 #include "vtkPlusImageVisualizer.h"
 
 // PlusLib includes
-#include <PlusConfigure.h>
-#include <PlusTrackedFrame.h>
+#include <igsioTrackedFrame.h>
 #include <vtkPlusDevice.h>
-#include <vtkPlusTrackedFrameList.h>
+#include <vtkIGSIOTrackedFrameList.h>
 
 // VTK includes
-#include <QVTKWidget.h>
+#include <QVTKOpenGLNativeWidget.h>
 #include <vtkDirectory.h>
 #include <vtkInteractorStyleTrackballCamera.h>
 #include <vtkMath.h>
@@ -36,6 +35,16 @@ See License.txt for details.
 //-----------------------------------------------------------------------------
 
 vtkStandardNewMacro(vtkPlusVisualizationController);
+
+//----------------------------------------------------------------------------
+vtkRenderWindow* vtkPlusVisualizationController::GetRenderWindow()
+{
+#if VTK_MAJOR_VERSION < 9
+  return this->Canvas->GetRenderWindow();
+#else
+  return this->Canvas->renderWindow();
+#endif
+}
 
 //-----------------------------------------------------------------------------
 vtkPlusVisualizationController::vtkPlusVisualizationController()
@@ -95,7 +104,7 @@ vtkPlusVisualizationController::~vtkPlusVisualizationController()
 }
 
 //-----------------------------------------------------------------------------
-void vtkPlusVisualizationController::SetCanvas(QVTKWidget* aCanvas)
+void vtkPlusVisualizationController::SetCanvas(QVTKOpenGLNativeWidget* aCanvas)
 {
   this->Canvas = aCanvas;
   this->Canvas->setFocusPolicy(Qt::ClickFocus);
@@ -256,53 +265,53 @@ PlusStatus vtkPlusVisualizationController::SetVisualizationMode(DISPLAY_MODE aMo
       return PLUS_FAIL;
     }
 
-    if (this->BlankRenderer != NULL && Canvas->GetRenderWindow()->HasRenderer(this->BlankRenderer))
+    if (this->BlankRenderer != NULL && this->GetRenderWindow()->HasRenderer(this->BlankRenderer))
     {
-      Canvas->GetRenderWindow()->RemoveRenderer(this->BlankRenderer);
+      this->GetRenderWindow()->RemoveRenderer(this->BlankRenderer);
     }
-    if (this->ImageVisualizer != NULL && Canvas->GetRenderWindow()->HasRenderer(this->ImageVisualizer->GetCanvasRenderer()))
+    if (this->ImageVisualizer != NULL && this->GetRenderWindow()->HasRenderer(this->ImageVisualizer->GetCanvasRenderer()))
     {
-      Canvas->GetRenderWindow()->RemoveRenderer(this->ImageVisualizer->GetCanvasRenderer());
+      this->GetRenderWindow()->RemoveRenderer(this->ImageVisualizer->GetCanvasRenderer());
     }
-    if (this->PerspectiveVisualizer != NULL && Canvas->GetRenderWindow()->HasRenderer(this->PerspectiveVisualizer->GetCanvasRenderer()))
+    if (this->PerspectiveVisualizer != NULL && this->GetRenderWindow()->HasRenderer(this->PerspectiveVisualizer->GetCanvasRenderer()))
     {
       // If there's already been a renderer added, remove it
-      Canvas->GetRenderWindow()->RemoveRenderer(this->PerspectiveVisualizer->GetCanvasRenderer());
+      this->GetRenderWindow()->RemoveRenderer(this->PerspectiveVisualizer->GetCanvasRenderer());
     }
     // Add the 2D renderer
-    if (!Canvas->GetRenderWindow()->HasRenderer(this->ImageVisualizer->GetCanvasRenderer()))
+    if (!this->GetRenderWindow()->HasRenderer(this->ImageVisualizer->GetCanvasRenderer()))
     {
-      Canvas->GetRenderWindow()->AddRenderer(this->ImageVisualizer->GetCanvasRenderer());
+      this->GetRenderWindow()->AddRenderer(this->ImageVisualizer->GetCanvasRenderer());
       this->ImageVisualizer->GetImageActor()->VisibilityOn();
       this->ImageVisualizer->UpdateCameraPose();
     }
 
     // Disable camera movements
-    Canvas->GetRenderWindow()->GetInteractor()->RemoveAllObservers();
+    this->GetRenderWindow()->GetInteractor()->RemoveAllObservers();
   }
   else if (aMode == DISPLAY_MODE_3D)
   {
-    if (this->BlankRenderer != NULL && Canvas->GetRenderWindow()->HasRenderer(this->BlankRenderer))
+    if (this->BlankRenderer != NULL && this->GetRenderWindow()->HasRenderer(this->BlankRenderer))
     {
-      Canvas->GetRenderWindow()->RemoveRenderer(this->BlankRenderer);
+      this->GetRenderWindow()->RemoveRenderer(this->BlankRenderer);
     }
-    if (this->ImageVisualizer != NULL && Canvas->GetRenderWindow()->HasRenderer(this->ImageVisualizer->GetCanvasRenderer()))
+    if (this->ImageVisualizer != NULL && this->GetRenderWindow()->HasRenderer(this->ImageVisualizer->GetCanvasRenderer()))
     {
-      Canvas->GetRenderWindow()->RemoveRenderer(this->ImageVisualizer->GetCanvasRenderer());
+      this->GetRenderWindow()->RemoveRenderer(this->ImageVisualizer->GetCanvasRenderer());
     }
-    if (this->PerspectiveVisualizer != NULL && Canvas->GetRenderWindow()->HasRenderer(this->PerspectiveVisualizer->GetCanvasRenderer()))
+    if (this->PerspectiveVisualizer != NULL && this->GetRenderWindow()->HasRenderer(this->PerspectiveVisualizer->GetCanvasRenderer()))
     {
-      Canvas->GetRenderWindow()->RemoveRenderer(this->PerspectiveVisualizer->GetCanvasRenderer());
+      this->GetRenderWindow()->RemoveRenderer(this->PerspectiveVisualizer->GetCanvasRenderer());
     }
 
     // Add the 3D renderer
-    if (!Canvas->GetRenderWindow()->HasRenderer(this->PerspectiveVisualizer->GetCanvasRenderer()))
+    if (!this->GetRenderWindow()->HasRenderer(this->PerspectiveVisualizer->GetCanvasRenderer()))
     {
-      Canvas->GetRenderWindow()->AddRenderer(this->PerspectiveVisualizer->GetCanvasRenderer());
+      this->GetRenderWindow()->AddRenderer(this->PerspectiveVisualizer->GetCanvasRenderer());
     }
 
     // Enable camera movements
-    Canvas->GetRenderWindow()->GetInteractor()->SetInteractorStyle(vtkInteractorStyleTrackballCamera::New());
+    this->GetRenderWindow()->GetInteractor()->SetInteractorStyle(vtkInteractorStyleTrackballCamera::New());
   }
   else
   {
@@ -450,6 +459,11 @@ PlusStatus vtkPlusVisualizationController::Update()
     this->GetImageActor()->SetInputData(this->SelectedChannel->GetBrightnessOutput());
   }
 
+  if (this->GetCanvasRenderer() != nullptr && this->GetCanvasRenderer()->GetRenderWindow() != nullptr)
+  {
+    this->GetCanvasRenderer()->GetRenderWindow()->Render();
+  }
+
   return PLUS_SUCCESS;
 }
 
@@ -490,18 +504,18 @@ PlusStatus vtkPlusVisualizationController::EnableVolumeActor(bool aEnable)
 }
 
 //-----------------------------------------------------------------------------
-PlusStatus vtkPlusVisualizationController::GetTransformTranslationString(const char* aTransformFrom, const char* aTransformTo, std::string& aTransformTranslationString, bool* aValid/* = NULL*/)
+PlusStatus vtkPlusVisualizationController::GetTransformTranslationString(const char* aTransformFrom, const char* aTransformTo, std::string& aTransformTranslationString, ToolStatus* aStatus/* = NULL*/)
 {
-  PlusTransformName transformName(aTransformFrom, aTransformTo);
+  igsioTransformName transformName(aTransformFrom, aTransformTo);
 
-  return GetTransformTranslationString(transformName, aTransformTranslationString, aValid);
+  return GetTransformTranslationString(transformName, aTransformTranslationString, aStatus);
 }
 
 //-----------------------------------------------------------------------------
-PlusStatus vtkPlusVisualizationController::GetTransformTranslationString(PlusTransformName aTransform, std::string& aTransformTranslationString, bool* aValid/* = NULL*/)
+PlusStatus vtkPlusVisualizationController::GetTransformTranslationString(igsioTransformName aTransform, std::string& aTransformTranslationString, ToolStatus* aStatus/* = NULL*/)
 {
   vtkSmartPointer<vtkMatrix4x4> transformMatrix = vtkSmartPointer<vtkMatrix4x4>::New();
-  if (GetTransformMatrix(aTransform, transformMatrix, aValid) != PLUS_SUCCESS)
+  if (GetTransformMatrix(aTransform, transformMatrix, aStatus) != PLUS_SUCCESS)
   {
     aTransformTranslationString = "N/A";
     return PLUS_FAIL;
@@ -516,17 +530,17 @@ PlusStatus vtkPlusVisualizationController::GetTransformTranslationString(PlusTra
 }
 
 //-----------------------------------------------------------------------------
-PlusStatus vtkPlusVisualizationController::GetTransformMatrix(const char* aTransformFrom, const char* aTransformTo, vtkMatrix4x4* aOutputMatrix, bool* aValid/* = NULL*/)
+PlusStatus vtkPlusVisualizationController::GetTransformMatrix(const char* aTransformFrom, const char* aTransformTo, vtkMatrix4x4* aOutputMatrix, ToolStatus* aStatus/* = NULL*/)
 {
-  PlusTransformName transformName(aTransformFrom, aTransformTo);
+  igsioTransformName transformName(aTransformFrom, aTransformTo);
 
-  return GetTransformMatrix(transformName, aOutputMatrix, aValid);
+  return GetTransformMatrix(transformName, aOutputMatrix, aStatus);
 }
 
 //-----------------------------------------------------------------------------
-PlusStatus vtkPlusVisualizationController::GetTransformMatrix(PlusTransformName aTransform, vtkMatrix4x4* aOutputMatrix, bool* aValid/* = NULL*/)
+PlusStatus vtkPlusVisualizationController::GetTransformMatrix(igsioTransformName aTransform, vtkMatrix4x4* aOutputMatrix, ToolStatus* aStatus/* = NULL*/)
 {
-  PlusTrackedFrame trackedFrame;
+  igsioTrackedFrame trackedFrame;
   if (this->SelectedChannel == NULL || this->SelectedChannel->GetTrackedFrame(trackedFrame) != PLUS_SUCCESS)
   {
     LOG_ERROR("Unable to get tracked frame from selected channel!");
@@ -538,7 +552,7 @@ PlusStatus vtkPlusVisualizationController::GetTransformMatrix(PlusTransformName 
     return PLUS_FAIL;
   }
 
-  if (this->TransformRepository->GetTransform(aTransform, aOutputMatrix, aValid) != PLUS_SUCCESS)
+  if (this->TransformRepository->GetTransform(aTransform, aOutputMatrix, aStatus) != PLUS_SUCCESS)
   {
     std::string transformName;
     aTransform.GetTransformName(transformName);
@@ -583,7 +597,7 @@ PlusStatus vtkPlusVisualizationController::SetInputColor(double r, double g, dou
 //-----------------------------------------------------------------------------
 PlusStatus vtkPlusVisualizationController::IsExistingTransform(const char* aTransformFrom, const char* aTransformTo, bool aUseLatestTrackedFrame/* = true */)
 {
-  PlusTransformName transformName(aTransformFrom, aTransformTo);
+  igsioTransformName transformName(aTransformFrom, aTransformTo);
 
   if (aUseLatestTrackedFrame)
   {
@@ -593,7 +607,7 @@ PlusStatus vtkPlusVisualizationController::IsExistingTransform(const char* aTran
       return PLUS_FAIL;
     }
 
-    PlusTrackedFrame trackedFrame;
+    igsioTrackedFrame trackedFrame;
     if (this->SelectedChannel->GetTrackedFrame(trackedFrame) != PLUS_SUCCESS)
     {
       LOG_ERROR("Unable to get tracked frame from data collector!");
@@ -613,7 +627,7 @@ PlusStatus vtkPlusVisualizationController::IsExistingTransform(const char* aTran
     this->TransformRepository->PrintSelf(std::cout, vtkIndent());
   }
 
-  return this->TransformRepository->IsExistingTransform(transformName);
+  return this->TransformRepository->IsExistingTransform(transformName)  == IGSIO_SUCCESS ? PLUS_SUCCESS : PLUS_FAIL;
 }
 
 //-----------------------------------------------------------------------------
@@ -677,18 +691,18 @@ PlusStatus vtkPlusVisualizationController::HideRenderer()
     return PLUS_FAIL;
   }
 
-  if (this->PerspectiveVisualizer != NULL && Canvas->GetRenderWindow()->HasRenderer(PerspectiveVisualizer->GetCanvasRenderer()))
+  if (this->PerspectiveVisualizer != NULL && this->GetRenderWindow()->HasRenderer(PerspectiveVisualizer->GetCanvasRenderer()))
   {
     // If there's already been a renderer added, remove it
-    Canvas->GetRenderWindow()->RemoveRenderer(PerspectiveVisualizer->GetCanvasRenderer());
+    this->GetRenderWindow()->RemoveRenderer(PerspectiveVisualizer->GetCanvasRenderer());
   }
-  if (this->ImageVisualizer != NULL && Canvas->GetRenderWindow()->HasRenderer(ImageVisualizer->GetCanvasRenderer()))
+  if (this->ImageVisualizer != NULL && this->GetRenderWindow()->HasRenderer(ImageVisualizer->GetCanvasRenderer()))
   {
     // If there's already been a renderer added, remove it
-    Canvas->GetRenderWindow()->RemoveRenderer(ImageVisualizer->GetCanvasRenderer());
+    this->GetRenderWindow()->RemoveRenderer(ImageVisualizer->GetCanvasRenderer());
   }
 
-  Canvas->GetRenderWindow()->AddRenderer(this->BlankRenderer);
+  this->GetRenderWindow()->AddRenderer(this->BlankRenderer);
 
   this->CurrentMode = DISPLAY_MODE_NONE;
 
@@ -799,7 +813,7 @@ PlusStatus vtkPlusVisualizationController::StopAndDisconnectDataCollector()
 //-----------------------------------------------------------------------------
 PlusStatus vtkPlusVisualizationController::ClearTransformRepository()
 {
-  vtkSmartPointer<vtkPlusTransformRepository> transformRepository = vtkSmartPointer<vtkPlusTransformRepository>::New();
+  vtkSmartPointer<vtkIGSIOTransformRepository> transformRepository = vtkSmartPointer<vtkIGSIOTransformRepository>::New();
   this->SetTransformRepository(transformRepository);
 
   return PLUS_SUCCESS;

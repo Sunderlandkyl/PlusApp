@@ -21,6 +21,7 @@ IF(PLUSBUILD_DOWNLOAD_PLUSLIBDATA AND EXISTS "${PLUSLIB_DATA_DIR}")
     ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_fCal_Sim_SpatialCalibration_2.0.xml
     ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_fCal_Sim_TemporalCalibration.xml
     ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_fCal_Sim_VolumeReconstruction.xml
+    ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_fCal_MmfUS_NDIAurora_ECG.xml
 
     ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_ChRobotics.xml
     ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_Microchip.xml
@@ -36,6 +37,7 @@ IF(PLUSBUILD_DOWNLOAD_PLUSLIBDATA AND EXISTS "${PLUSLIB_DATA_DIR}")
     ${PLUSLIB_DATA_DIR}/CADModels/fCalPhantom/fCal_2.0.stl
     ${PLUSLIB_DATA_DIR}/CADModels/fCalPhantom/fCal_3.1.stl
     ${PLUSLIB_DATA_DIR}/CADModels/fCalPhantom/fCal_L1.4.stl
+    ${PLUSLIB_DATA_DIR}/CADModels/fCalPhantom/fCal_Echo1.0.stl
     ${PLUSLIB_DATA_DIR}/CADModels/LinearProbe/Probe_L14-5_38.stl
     ${PLUSLIB_DATA_DIR}/CADModels/EndocavityProbe/Probe_EC9-5_10.stl
     ${PLUSLIB_DATA_DIR}/CADModels/CurvilinearProbe/Probe_C5-2_60.stl
@@ -48,6 +50,59 @@ IF(PLUSBUILD_DOWNLOAD_PLUSLIBDATA AND EXISTS "${PLUSLIB_DATA_DIR}")
 
   IF(PLUS_USE_Ascension3DG)
     LIST(APPEND PLUSLIB_CONFIG_FILES ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_Ascension3DG.xml)
+  ENDIF()
+
+  IF(PLUS_USE_ATRACSYS)
+    LIST(APPEND PLUSLIB_CONFIG_FILES
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_Atracsys.xml
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_AstmPhantomTest_Atracsys.xml
+      )
+    SET(ATRACSYS_MARKERS
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/AtracsysTools/stylus.ini
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/AtracsysTools/geometry020.ini
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/AtracsysTools/geometry101.ini
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/AtracsysTools/geometry102.ini
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/AtracsysTools/geometry103.ini
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/AtracsysTools/geometry104.ini
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/AtracsysTools/geometry105.ini
+      )
+  ENDIF()
+  
+  IF(PLUS_USE_PICOSCOPE)
+    LIST(APPEND PLUSLIB_CONFIG_FILES
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_PicoScopeP2000.xml
+      )
+  ENDIF()
+
+  IF(PLUS_USE_AZUREKINECT)
+    LIST(APPEND PLUSLIB_CONFIG_FILES
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_AzureKinect.xml
+      )
+  ENDIF()
+
+  IF(PLUS_USE_REVOPOINT3DCAMERA)
+    LIST(APPEND PLUSLIB_CONFIG_FILES
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_Revopoint3DCamera.xml
+      )
+  ENDIF()
+
+  IF (PLUS_USE_INTELREALSENSE)
+    LIST(APPEND PLUSLIB_CONFIG_FILES
+    ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_IntelRealSenseVideo.xml
+    )
+  ENDIF()
+
+  IF(PLUS_USE_SPINNAKER_VIDEO)
+    LIST(APPEND PLUSLIB_CONFIG_FILES
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_SpinnakerVideoMinimal.xml
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_SpinnakerVideoManualControl.xml
+      )
+  ENDIF()
+
+  IF(PLUS_USE_BLACKMAGIC_DECKLINK)
+    LIST(APPEND PLUSLIB_CONFIG_FILES
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_BlackMagicDeckLink.xml
+    )
   ENDIF()
 
   IF(PLUS_USE_BKPROFOCUS_VIDEO)
@@ -105,6 +160,14 @@ IF(PLUSBUILD_DOWNLOAD_PLUSLIBDATA AND EXISTS "${PLUSLIB_DATA_DIR}")
       ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_MmfVideoCapture.xml
       ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_MmfColorVideoCapture.xml
       )
+
+    IF (PLUS_ENABLE_VIDEOSTREAMING)
+      IF (PLUS_USE_VP9)
+        LIST(APPEND PLUSLIB_CONFIG_FILES
+          ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_CompressedVideo.xml
+          )
+      ENDIF()
+    ENDIF()
   ENDIF()
 
   IF(PLUS_USE_OPTICAL_MARKER_TRACKER)
@@ -144,9 +207,31 @@ IF(PLUSBUILD_DOWNLOAD_PLUSLIBDATA AND EXISTS "${PLUSLIB_DATA_DIR}")
     ENDIF()
   ENDIF()
 
+  IF(PLUS_USE_OPTITRACK)
+    IF (PLUS_MOTIVE_VERSION_MAJOR LESS 2)
+      LIST(APPEND PLUSLIB_CONFIG_FILES
+        ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_OptiTrack_TTPandTRA.xml
+        ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_OptiTrack_TTPOnly.xml)
+    ELSE()
+      SET(OPTITRACK_ADDITIONAL_FILES
+        ${PLUSLIB_DATA_DIR}/ConfigFiles/OptiTrack/EmptyProfile.xml
+        ${PLUSLIB_DATA_DIR}/ConfigFiles/OptiTrack/Reference.tra
+        ${PLUSLIB_DATA_DIR}/ConfigFiles/OptiTrack/Stylus.tra
+        )
+      LIST(APPEND PLUSLIB_CONFIG_FILES
+        ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_OptiTrack_AddMarkersUsingTRA.xml
+        ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_OptiTrack_Profile.xml
+        ${OPTITRACK_ADDITIONAL_FILES}
+        )
+    ENDIF()
+  ENDIF()
 
   IF(PLUS_USE_PHIDGET_SPATIAL_TRACKER)
     LIST(APPEND PLUSLIB_CONFIG_FILES ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_PhidgetSpatial.xml)
+  ENDIF()
+
+  IF(PLUS_USE_GENERIC_SENSOR_TRACKER)
+    LIST(APPEND PLUSLIB_CONFIG_FILES ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_GenericSensor.xml)
   ENDIF()
 
   IF(PLUS_USE_PHILIPS_3D_ULTRASOUND)
@@ -158,6 +243,7 @@ IF(PLUSBUILD_DOWNLOAD_PLUSLIBDATA AND EXISTS "${PLUSLIB_DATA_DIR}")
       ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_fCal_Ultrasonix_L14-5_NDIPolaris_2.0.xml
       ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_NDIPolaris.xml
       ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_NDIAurora.xml
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_AstmPhantomTest_NDI_Polaris.xml
       )
     SET(NDI_TOOL_DEFINITIONS
       ${PLUSLIB_DATA_DIR}/ConfigFiles/NdiToolDefinitions/8700339.rom
@@ -197,43 +283,45 @@ IF(PLUSBUILD_DOWNLOAD_PLUSLIBDATA AND EXISTS "${PLUSLIB_DATA_DIR}")
     LIST(APPEND PLUSLIB_CONFIG_FILES ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_VfwVideoCapture.xml)
   ENDIF()
 
+  IF(PLUS_USE_OpenCV_VIDEO)
+    LIST(APPEND PLUSLIB_CONFIG_FILES ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_OpenCVWebcam.xml)
+  ENDIF()
+
+  IF(PLUS_USE_CLARIUS)
+    LIST(APPEND PLUSLIB_CONFIG_FILES
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_ClariusVideoCapture.xml
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_ClariusVideoCapture_IMU.xml
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_ClariusVideoRfBMode.xml
+      )
+  ENDIF()
+
+  IF(PLUS_USE_CLARIUS_OEM)
+    LIST(APPEND PLUSLIB_CONFIG_FILES ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_ClariusOEMVideoCapture.xml)
+  ENDIF()
+
+  IF(PLUS_USE_STEAMVR)
+    LIST(APPEND PLUSLIB_CONFIG_FILES
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_SteamVR_All.xml
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_SteamVR_Controller.xml
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_SteamVR_Controller_GenericTracker.xml
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_SteamVR_GenericTracker.xml
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_SteamVR_HMD.xml
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_SteamVR_HMD_Controller.xml
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_SteamVR_HMD_Controller_GenericTracker.xml
+      ${PLUSLIB_DATA_DIR}/ConfigFiles/PlusDeviceSet_Server_SteamVR_HMD_GenericTracker.xml
+      )
+  ENDIF()
+
   SET(PLUSLIB_DATA_FILES
-    ${PLUSLIB_DATA_DIR}/TestImages/fCal_Test_Calibration_3NWires.mha
-    ${PLUSLIB_DATA_DIR}/TestImages/fCal_Test_Calibration_3NWires_fCal2.0.mha
-    ${PLUSLIB_DATA_DIR}/TestImages/WaterTankBottomTranslationTrackerBuffer-trimmed.mha
-    ${PLUSLIB_DATA_DIR}/TestImages/WaterTankBottomTranslationVideoBuffer.mha
-    ${PLUSLIB_DATA_DIR}/TestImages/EightLandmarkPointsTrackedForPhantomRegistration.mha
+    ${PLUSLIB_DATA_DIR}/TestImages/fCal_Test_Calibration_3NWires.igs.mha
+    ${PLUSLIB_DATA_DIR}/TestImages/fCal_Test_Calibration_3NWires_fCal2.0.igs.mha
+    ${PLUSLIB_DATA_DIR}/TestImages/WaterTankBottomTranslationTrackerBuffer-trimmed.igs.mha
+    ${PLUSLIB_DATA_DIR}/TestImages/WaterTankBottomTranslationVideoBuffer.igs.mha
+    ${PLUSLIB_DATA_DIR}/TestImages/EightLandmarkPointsTrackedForPhantomRegistration.igs.mha
     )
 ENDIF()
 
-FOREACH(_qt_component Core;Gui;Network;Sql;XmlPatterns;OpenGL;Test;Widgets;Xml;WebKit)
-  IF(TARGET Qt5::${_qt_component})
-    GET_TARGET_PROPERTY(_configs Qt5::${_qt_component} IMPORTED_CONFIGURATIONS)
-    FOREACH(_config IN LISTS _configs)
-    GET_TARGET_PROPERTY(_location Qt5::${_qt_component} IMPORTED_LOCATION_${_config})
-      IF(${_config} STREQUAL RELEASE OR ${_config} STREQUAL NOCONFIG)
-        LIST(APPEND _entries ${_config})
-        LIST(APPEND PlusApp_QT_INSTALL_FILES ${_location})
-        BREAK()
-      ENDIF()
-    ENDFOREACH()
-  ENDIF()
-
-  LIST(LENGTH _entries _size)
-  IF(_size EQUAL 0)
-    MESSAGE(FATAL_ERROR "Unable to locate Qt5::${_qt_component} library file for install.")
-  ENDIF()
-ENDFOREACH()
-
-INSTALL(FILES ${PlusApp_QT_INSTALL_FILES}
-  DESTINATION ${PLUSAPP_INSTALL_BIN_DIR}
-  COMPONENT RuntimeLibraries
-  )
 IF(WIN32)
-  INSTALL(FILES ${QT_ROOT_DIR}/plugins/platforms/qwindows${CMAKE_SHARED_LIBRARY_SUFFIX}
-    DESTINATION ${PLUSAPP_INSTALL_BIN_DIR}/platforms
-    COMPONENT RuntimeLibraries
-    )
   # Install Plus command prompt starting script
   INSTALL(FILES
       ${PLUSLIB_SOURCE_DIR}/src/scripts/StartPlusCommandPrompt.bat
@@ -256,6 +344,12 @@ IF(PLUSAPP_INSTALL_CONFIG_DIR)
   IF(PLUS_USE_NDI)
     INSTALL(FILES ${NDI_TOOL_DEFINITIONS}
       DESTINATION ${PLUSAPP_INSTALL_CONFIG_DIR}/NdiToolDefinitions
+      COMPONENT Data
+      )
+  ENDIF()
+  IF(PLUS_USE_ATRACSYS)
+    INSTALL(FILES ${ATRACSYS_MARKERS}
+      DESTINATION ${PLUSAPP_INSTALL_CONFIG_DIR}/AtracsysTools
       COMPONENT Data
       )
   ENDIF()

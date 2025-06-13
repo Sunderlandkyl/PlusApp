@@ -2,11 +2,20 @@ PROJECT(PlusApp)
 
 CMAKE_MINIMUM_REQUIRED(VERSION 3.10.0)
 
+INCLUDE(${CMAKE_CURRENT_SOURCE_DIR}/CMake/PlusAppMacros.cmake)
+
 # ------------------------------------------------------------------------
 # PlusLib
 # --------------------------------------------------------------------------
 FIND_PACKAGE(PlusLib REQUIRED NO_MODULE)
 INCLUDE(${PlusLib_USE_FILE})
+
+IF(VTK_VERSION VERSION_LESS 8.9.0)
+  SET(PLUSAPP_VTK_PREFIX vtk)
+ELSE()
+  SET(PLUSAPP_VTK_PREFIX VTK::)
+  SET(VTK_RENDERING_BACKEND OpenGL2)
+ENDIF()
 
 # ------------------------------------------------------------------------
 # Set project version number: PlusApp version should identical to Plus version
@@ -202,7 +211,40 @@ INCLUDE (${CMAKE_CURRENT_SOURCE_DIR}/CPackConfig.cmake)
   # to always look for includes there:
 SET(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-FIND_PACKAGE(Qt5 REQUIRED COMPONENTS Core Widgets Test Xml Network)
+SET(PLUSAPP_QT_COMPONENTS ${PLUSLIB_QT_COMPONENTS}
+  Core
+  Gui
+  Network
+  Sql
+  XmlPatterns
+  OpenGL
+  Test
+  Widgets
+  Xml
+  CACHE INTERNAL "" FORCE)
+LIST(REMOVE_DUPLICATES PLUSAPP_QT_COMPONENTS)
+FIND_PACKAGE(Qt5 REQUIRED COMPONENTS ${PLUSAPP_QT_COMPONENTS})
+
+IF(Qt5_FOUND AND WIN32 AND TARGET Qt5::qmake AND NOT TARGET Qt5::windeployqt)
+  GET_TARGET_PROPERTY(_qt5_qmake_location Qt5::qmake IMPORTED_LOCATION)
+
+  EXECUTE_PROCESS(
+      COMMAND "${_qt5_qmake_location}" -query QT_INSTALL_PREFIX
+      RESULT_VARIABLE return_code
+      OUTPUT_VARIABLE qt5_install_prefix
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+
+  SET(imported_location "${qt5_install_prefix}/bin/windeployqt.exe")
+
+  IF(EXISTS ${imported_location})
+      ADD_EXECUTABLE(Qt5::windeployqt IMPORTED)
+
+      SET_TARGET_PROPERTIES(Qt5::windeployqt PROPERTIES
+          IMPORTED_LOCATION ${imported_location}
+      )
+  ENDIF()
+ENDIF()
 
 # These variables are populated as part of our install script
 SET(QT_VERSION_MAJOR ${Qt5Core_VERSION_MAJOR}) 
@@ -238,6 +280,11 @@ ENDIF()
 # --------------------------------------------------------------------------
 # Build the fCal application (Qt)
 # --------------------------------------------------------------------------
+IF(NOT PLUS_RENDERING_ENABLED)
+  SET(PLUSAPP_BUILD_fCal OFF CACHE BOOL "Build the fCal application (Qt)" FORCE)
+  MESSAGE(WARNING "Rendering backend is None. fCal will be disabled")
+ENDIF()
+
 IF(PLUSAPP_BUILD_fCal)
   ADD_SUBDIRECTORY(fCal)
   ADD_DEPENDENCIES(fCal ${PLUSLIB_DEPENDENCIES})
@@ -267,12 +314,6 @@ IF(NOT EXISTS ${DOXYGEN_DOT_EXECUTABLE})
 ENDIF()
 
 ADD_SUBDIRECTORY(Documentation)
-
-#-----------------------------------------------------------------------------
-# Include PlusLib MS projects
-# --------------------------------------------------------------------------
-INCLUDE_PLUSLIB_MS_PROJECTS()
-GROUP_PLUSLIB_MS_PROJECTS("PlusLib")
 
 SET(PLUSAPP_INCLUDE_DIRS
   ${CMAKE_CURRENT_SOURCE_DIR}
@@ -331,6 +372,7 @@ ELSE()
   CONFIGURE_FILE(
     ${CMAKE_CURRENT_SOURCE_DIR}/BuildAndTest.sh.in
     ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_FILES_DIRECTORY}/BuildAndTest.sh
+    @ONLY
     )
   FILE(COPY ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_FILES_DIRECTORY}/BuildAndTest.sh
     DESTINATION ${CMAKE_CURRENT_BINARY_DIR}

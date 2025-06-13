@@ -76,19 +76,18 @@ SET(fCal_LIBS
   PlusWidgets
   vtkPlusCommon
   itkvnl 
-  itkvnl_algo 
+  itkvnl_algo
   vtkPlusCalibration 
   vtkPlusDataCollection 
   vtkPlusVolumeReconstruction
-  vtkGUISupportQt
   )
-IF(TARGET vtkRenderingGL2PS${VTK_RENDERING_BACKEND})
+IF(TARGET ${PLUSAPP_VTK_PREFIX}RenderingGL2PS${VTK_RENDERING_BACKEND})
   LIST(APPEND fCal_LIBS
-    vtkRenderingGL2PS${VTK_RENDERING_BACKEND}
+    ${PLUSAPP_VTK_PREFIX}RenderingGL2PS${VTK_RENDERING_BACKEND}
     )
 ELSEIF(TARGET vtkRenderingGL2PS)
   LIST(APPEND fCal_LIBS
-    vtkRenderingGL2PS
+    ${PLUSAPP_VTK_PREFIX}RenderingGL2PS
     )
 ENDIF()
 
@@ -101,7 +100,7 @@ IF(WIN32)
   SET(APP_MODE WIN32)
 ENDIF()
 
-ADD_EXECUTABLE(fCal ${APP_MODE} 
+AddPlusQt5Executable(fCal ${APP_MODE} 
   ${fCal_SRCS} 
   ${fCal_Toolbox_SRCS}
   ${fCal_UI_HDRS} 
@@ -110,6 +109,10 @@ ADD_EXECUTABLE(fCal ${APP_MODE}
   ${fCal_QT_Resources}
   )
 SET_TARGET_PROPERTIES(fCal PROPERTIES COMPILE_DEFINTIIONS ${Qt5Widgets_DEFINITIONS})
+IF(NOT VTK_VERSION VERSION_LESS 9.0.0)
+  # vtk_module_autoinit is needed
+  vtk_module_autoinit(TARGETS fCal MODULES ${VTK_LIBRARIES})
+ENDIF()
 TARGET_LINK_LIBRARIES(fCal PUBLIC ${fCal_LIBS})
 target_include_directories(fCal PUBLIC 
   ${CMAKE_CURRENT_BINARY_DIR}

@@ -11,14 +11,14 @@ See License.txt for details.
 // PlusLib includes
 #include <PlusFidPatternRecognition.h>
 #include <PlusFidPatternRecognitionCommon.h>
-#include <PlusTrackedFrame.h>
-#include <PlusVideoFrame.h>
+#include <igsioTrackedFrame.h>
+#include <igsioVideoFrame.h>
 #include <QPlusConfigFileSaverDialog.h>
 #include <vtkPlusChannel.h>
 #include <vtkPlusDataCollector.h>
 #include <vtkPlusDevice.h>
 #include <vtkPlusSequenceIO.h>
-#include <vtkPlusTrackedFrameList.h>
+#include <vtkIGSIOTrackedFrameList.h>
 
 // VTK includes
 #include <vtkActor.h>
@@ -145,7 +145,7 @@ protected:
   virtual void GetEventPositionWorld(int* eventPosition, double* eventPosition_World)
   {
     int* canvasSize = m_ParentDialog->GetCanvasRenderer()->GetRenderWindow()->GetSize();
-    int imageDimensions[3] = { 0, 0, 1 };
+    FrameSizeType imageDimensions = { 0, 0, 1 };
     m_ParentDialog->GetFrameSize(imageDimensions);
 
     double offsetXMonitor = 0.0;
@@ -645,7 +645,7 @@ protected:
     // Get offsets (distance between the canvas edge and the image) and reference lengths
     int* canvasSize;
     canvasSize = m_ParentDialog->GetCanvasRenderer()->GetRenderWindow()->GetSize();
-    int imageDimensions[3] = { 0, 0, 1 };
+    FrameSizeType imageDimensions = { 0, 0, 1 };
     m_ParentDialog->GetFrameSize(imageDimensions);
 
     double offsetXImage = 0.0;
@@ -951,7 +951,11 @@ PlusStatus QPlusSegmentationParameterDialog::InitializeVisualization()
   m_ImageVisualizer->GetCanvasRenderer()->SetBackground(0.1, 0.1, 0.1);
   m_ImageVisualizer->SetResultColor(0.8, 0.0, 0.0);
   m_ImageVisualizer->SetResultOpacity(0.8);
+#if VTK_MAJOR_VERSION < 9
   ui.canvas->GetRenderWindow()->AddRenderer(m_ImageVisualizer->GetCanvasRenderer());
+#else
+  ui.canvas->renderWindow()->AddRenderer(m_ImageVisualizer->GetCanvasRenderer());
+#endif
   m_ImageVisualizer->SetInputData(m_Frame.GetImageData()->GetImage());
 
   // Create default picker
@@ -978,13 +982,14 @@ PlusStatus QPlusSegmentationParameterDialog::ReadConfiguration()
   vtkXMLDataElement* segmentationParameters = vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationData()->FindNestedElementWithName("Segmentation");
   if (segmentationParameters == NULL)
   {
-    LOG_ERROR("No Segmentation element is found in the XML tree!");
-    return PLUS_FAIL;
+    LOG_WARNING("No Segmentation element is found in the XML tree! Using default values");
+    segmentationParameters = igsioXmlUtils::GetNestedElementWithName(vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationData(), "Segmentation");
+    PlusFidSegmentation::SetDefaultSegmentationParameters(segmentationParameters);
   }
 
   // Feed parameters
   double approximateSpacingMmPerPixel(0.0);
-  if (segmentationParameters->GetScalarAttribute("ApproximateSpacingMmPerPixel", approximateSpacingMmPerPixel))
+  if (segmentationParameters && segmentationParameters->GetScalarAttribute("ApproximateSpacingMmPerPixel", approximateSpacingMmPerPixel))
   {
     m_ApproximateSpacingMmPerPixel = approximateSpacingMmPerPixel;
     ui.label_SpacingResult->setText(QString("%1 (original)").arg(approximateSpacingMmPerPixel));
@@ -995,7 +1000,7 @@ PlusStatus QPlusSegmentationParameterDialog::ReadConfiguration()
   }
 
   double morphologicalOpeningCircleRadiusMm(0.0);
-  if (segmentationParameters->GetScalarAttribute("MorphologicalOpeningCircleRadiusMm", morphologicalOpeningCircleRadiusMm))
+  if (segmentationParameters && segmentationParameters->GetScalarAttribute("MorphologicalOpeningCircleRadiusMm", morphologicalOpeningCircleRadiusMm))
   {
     ui.doubleSpinBox_OpeningCircleRadius->setValue(morphologicalOpeningCircleRadiusMm);
   }
@@ -1005,7 +1010,7 @@ PlusStatus QPlusSegmentationParameterDialog::ReadConfiguration()
   }
 
   double morphologicalOpeningBarSizeMm(0.0);
-  if (segmentationParameters->GetScalarAttribute("MorphologicalOpeningBarSizeMm", morphologicalOpeningBarSizeMm))
+  if (segmentationParameters && segmentationParameters->GetScalarAttribute("MorphologicalOpeningBarSizeMm", morphologicalOpeningBarSizeMm))
   {
     ui.doubleSpinBox_OpeningBarSize->setValue(morphologicalOpeningBarSizeMm);
   }
@@ -1016,7 +1021,8 @@ PlusStatus QPlusSegmentationParameterDialog::ReadConfiguration()
 
   int clipOrigin[2] = { 0 };
   int clipSize[2] = { 0 };
-  if (segmentationParameters->GetVectorAttribute("ClipRectangleOrigin", 2, clipOrigin) &&
+  if (segmentationParameters &&
+      segmentationParameters->GetVectorAttribute("ClipRectangleOrigin", 2, clipOrigin) &&
       segmentationParameters->GetVectorAttribute("ClipRectangleSize", 2, clipSize))
   {
     if (clipOrigin[0] < 0 || clipOrigin[1] < 0)
@@ -1039,7 +1045,7 @@ PlusStatus QPlusSegmentationParameterDialog::ReadConfiguration()
   }
 
   double maxLinePairDistanceErrorPercent(0.0);
-  if (segmentationParameters->GetScalarAttribute("MaxLinePairDistanceErrorPercent", maxLinePairDistanceErrorPercent))
+  if (segmentationParameters && segmentationParameters->GetScalarAttribute("MaxLinePairDistanceErrorPercent", maxLinePairDistanceErrorPercent))
   {
     ui.doubleSpinBox_LinePairDistanceError->setValue(maxLinePairDistanceErrorPercent);
   }
@@ -1049,7 +1055,7 @@ PlusStatus QPlusSegmentationParameterDialog::ReadConfiguration()
   }
 
   double maxAngleDifferenceDegrees(0.0);
-  if (segmentationParameters->GetScalarAttribute("MaxAngleDifferenceDegrees", maxAngleDifferenceDegrees))
+  if (segmentationParameters && segmentationParameters->GetScalarAttribute("MaxAngleDifferenceDegrees", maxAngleDifferenceDegrees))
   {
     ui.doubleSpinBox_AngleDifference->setValue(maxAngleDifferenceDegrees);
   }
@@ -1059,7 +1065,7 @@ PlusStatus QPlusSegmentationParameterDialog::ReadConfiguration()
   }
 
   double minThetaDegrees(0.0);
-  if (segmentationParameters->GetScalarAttribute("MinThetaDegrees", minThetaDegrees))
+  if (segmentationParameters && segmentationParameters->GetScalarAttribute("MinThetaDegrees", minThetaDegrees))
   {
     ui.doubleSpinBox_MinTheta->setValue(minThetaDegrees);
   }
@@ -1069,7 +1075,7 @@ PlusStatus QPlusSegmentationParameterDialog::ReadConfiguration()
   }
 
   double maxThetaDegrees(0.0);
-  if (segmentationParameters->GetScalarAttribute("MaxThetaDegrees", maxThetaDegrees))
+  if (segmentationParameters && segmentationParameters->GetScalarAttribute("MaxThetaDegrees", maxThetaDegrees))
   {
     ui.doubleSpinBox_MaxTheta->setValue(maxThetaDegrees);
   }
@@ -1079,7 +1085,7 @@ PlusStatus QPlusSegmentationParameterDialog::ReadConfiguration()
   }
 
   double angleToleranceDegrees(0.0);
-  if (segmentationParameters->GetScalarAttribute("AngleToleranceDegrees", angleToleranceDegrees))
+  if (segmentationParameters && segmentationParameters->GetScalarAttribute("AngleToleranceDegrees", angleToleranceDegrees))
   {
     ui.doubleSpinBox_AngleTolerance->setValue(angleToleranceDegrees);
   }
@@ -1089,7 +1095,7 @@ PlusStatus QPlusSegmentationParameterDialog::ReadConfiguration()
   }
 
   double thresholdImagePercent(0.0);
-  if (segmentationParameters->GetScalarAttribute("ThresholdImagePercent", thresholdImagePercent))
+  if (segmentationParameters && segmentationParameters->GetScalarAttribute("ThresholdImagePercent", thresholdImagePercent))
   {
     ui.doubleSpinBox_ImageThreshold->setValue(thresholdImagePercent);
   }
@@ -1099,7 +1105,7 @@ PlusStatus QPlusSegmentationParameterDialog::ReadConfiguration()
   }
 
   double collinearPointsMaxDistanceFromLineMm(0.0);
-  if (segmentationParameters->GetScalarAttribute("CollinearPointsMaxDistanceFromLineMm", collinearPointsMaxDistanceFromLineMm))
+  if (segmentationParameters && segmentationParameters->GetScalarAttribute("CollinearPointsMaxDistanceFromLineMm", collinearPointsMaxDistanceFromLineMm))
   {
     ui.doubleSpinBox_CollinearPointsMaxDistanceFromLine->setValue(collinearPointsMaxDistanceFromLineMm);
   }
@@ -1109,7 +1115,7 @@ PlusStatus QPlusSegmentationParameterDialog::ReadConfiguration()
   }
 
   double useOriginalImageIntensityForDotIntensityScore(-1);
-  if (segmentationParameters->GetScalarAttribute("UseOriginalImageIntensityForDotIntensityScore", useOriginalImageIntensityForDotIntensityScore))
+  if (segmentationParameters && segmentationParameters->GetScalarAttribute("UseOriginalImageIntensityForDotIntensityScore", useOriginalImageIntensityForDotIntensityScore))
   {
     if (useOriginalImageIntensityForDotIntensityScore == 0)
     {
@@ -1130,7 +1136,7 @@ PlusStatus QPlusSegmentationParameterDialog::ReadConfiguration()
   }
 
   double maxCandidates(PlusFidSegmentation::DEFAULT_NUMBER_OF_MAXIMUM_FIDUCIAL_POINT_CANDIDATES);
-  if (segmentationParameters->GetScalarAttribute("NumberOfMaximumFiducialPointCandidates", maxCandidates))
+  if (segmentationParameters && segmentationParameters->GetScalarAttribute("NumberOfMaximumFiducialPointCandidates", maxCandidates))
   {
     ui.doubleSpinBox_MaxCandidates->setValue(maxCandidates);
   }
@@ -1255,6 +1261,16 @@ PlusStatus QPlusSegmentationParameterDialog::WriteConfiguration()
     segmentationParameters->SetIntAttribute("NumberOfMaximumFiducialPointCandidates", ui.doubleSpinBox_MaxCandidates->value());
   }
 
+  vtkXMLDataElement* temporalCalibration = vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationData()->FindNestedElementWithName("vtkPlusTemporalCalibrationAlgo");
+  if (temporalCalibration == nullptr)
+  {
+    temporalCalibration = vtkXMLDataElement::New();
+    temporalCalibration->SetName("vtkPlusTemporalCalibrationAlgo");
+    vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationData()->AddNestedElement(temporalCalibration);
+  }
+  temporalCalibration->SetAttribute("ClipRectangleOrigin", originSs.str().c_str());
+  temporalCalibration->SetAttribute("ClipRectangleSize", sizeSs.str().c_str());
+
   return PLUS_SUCCESS;
 }
 
@@ -1317,10 +1333,25 @@ void QPlusSegmentationParameterDialog::resizeEvent(QResizeEvent* aEvent)
 {
   LOG_TRACE("QPlusSegmentationParameterDialog::resizeEvent");
 
-  if (m_ImageVisualizer != NULL)
+  if (m_ImageVisualizer != nullptr)
   {
+    // render window not visible yet, scaling not correct
     m_ImageVisualizer->UpdateCameraPose();
   }
+
+  QDialog::resizeEvent(aEvent);
+}
+
+//----------------------------------------------------------------------------
+void QPlusSegmentationParameterDialog::showEvent(QShowEvent* aEvent)
+{
+  if (m_ImageVisualizer != nullptr)
+  {
+    // render window not visible yet, scaling not correct
+    m_ImageVisualizer->UpdateCameraPose();
+  }
+
+  QDialog::showEvent(aEvent);
 }
 
 //-----------------------------------------------------------------------------
@@ -1331,6 +1362,11 @@ void QPlusSegmentationParameterDialog::UpdateCanvas()
   SegmentCurrentImage();
 
   ui.canvas->update();
+#if VTK_MAJOR_VERSION < 9 && VTK_MINOR_VERSION < 9
+  ui.canvas->GetRenderWindow()->Render();
+#else
+  ui.canvas->renderWindow()->Render();
+#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -1439,7 +1475,7 @@ void QPlusSegmentationParameterDialog::ExportImage()
 {
   LOG_TRACE("QPlusSegmentationParameterDialog::ExportImage()");
 
-  vtkSmartPointer<vtkPlusTrackedFrameList> trackedFrameList = vtkSmartPointer<vtkPlusTrackedFrameList>::New();
+  vtkSmartPointer<vtkIGSIOTrackedFrameList> trackedFrameList = vtkSmartPointer<vtkIGSIOTrackedFrameList>::New();
   trackedFrameList->AddTrackedFrame(&m_Frame);
 
   std::string fileName = vtkPlusConfig::GetInstance()->GetImagePath(
@@ -1458,7 +1494,7 @@ void QPlusSegmentationParameterDialog::ExportImage()
     {
       // Save config file next to the tracked frame list
       std::string configFileName = vtkPlusConfig::GetInstance()->GetImagePath(fileName + "_Config.xml");
-      PlusCommon::XML::PrintXML(configFileName, vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationData());
+      igsioCommon::XML::PrintXML(configFileName, vtkPlusConfig::GetInstance()->GetDeviceSetConfigurationData());
     }
   }
   else
@@ -1487,10 +1523,17 @@ PlusStatus QPlusSegmentationParameterDialog::SwitchToROIMode()
   m_ROIModeHandler->SetEnabled(true);
   m_ImageVisualizer->EnableROI(true);
 
+#if VTK_MAJOR_VERSION < 9
   ui.canvas->GetRenderWindow()->GetInteractor()->RemoveAllObservers();
   ui.canvas->GetRenderWindow()->GetInteractor()->AddObserver(vtkCommand::LeftButtonPressEvent, m_ROIModeHandler);
   ui.canvas->GetRenderWindow()->GetInteractor()->AddObserver(vtkCommand::LeftButtonReleaseEvent, m_ROIModeHandler);
   ui.canvas->GetRenderWindow()->GetInteractor()->AddObserver(vtkCommand::MouseMoveEvent, m_ROIModeHandler);
+#else
+  ui.canvas->renderWindow()->GetInteractor()->RemoveAllObservers();
+  ui.canvas->renderWindow()->GetInteractor()->AddObserver(vtkCommand::LeftButtonPressEvent, m_ROIModeHandler);
+  ui.canvas->renderWindow()->GetInteractor()->AddObserver(vtkCommand::LeftButtonReleaseEvent, m_ROIModeHandler);
+  ui.canvas->renderWindow()->GetInteractor()->AddObserver(vtkCommand::MouseMoveEvent, m_ROIModeHandler);
+#endif
 
   return PLUS_SUCCESS;
 }
@@ -1514,10 +1557,17 @@ PlusStatus QPlusSegmentationParameterDialog::SwitchToSpacingMode()
   m_ImageVisualizer->EnableROI(false);
   m_SpacingModeHandler->SetEnabled(true);
 
+#if VTK_MAJOR_VERSION < 9
   ui.canvas->GetRenderWindow()->GetInteractor()->RemoveAllObservers();
   ui.canvas->GetRenderWindow()->GetInteractor()->AddObserver(vtkCommand::LeftButtonPressEvent, m_SpacingModeHandler);
   ui.canvas->GetRenderWindow()->GetInteractor()->AddObserver(vtkCommand::LeftButtonReleaseEvent, m_SpacingModeHandler);
   ui.canvas->GetRenderWindow()->GetInteractor()->AddObserver(vtkCommand::MouseMoveEvent, m_SpacingModeHandler);
+#else
+  ui.canvas->renderWindow()->GetInteractor()->RemoveAllObservers();
+  ui.canvas->renderWindow()->GetInteractor()->AddObserver(vtkCommand::LeftButtonPressEvent, m_SpacingModeHandler);
+  ui.canvas->renderWindow()->GetInteractor()->AddObserver(vtkCommand::LeftButtonReleaseEvent, m_SpacingModeHandler);
+  ui.canvas->renderWindow()->GetInteractor()->AddObserver(vtkCommand::MouseMoveEvent, m_SpacingModeHandler);
+#endif
 
   return PLUS_SUCCESS;
 }
@@ -1554,7 +1604,7 @@ double QPlusSegmentationParameterDialog::GetSpacingReferenceHeight()
 }
 
 //-----------------------------------------------------------------------------
-PlusStatus QPlusSegmentationParameterDialog::GetFrameSize(int aImageDimensions[3])
+PlusStatus QPlusSegmentationParameterDialog::GetFrameSize(FrameSizeType& aImageDimensions)
 {
   LOG_TRACE("QPlusSegmentationParameterDialog::GetFrameSize");
 
@@ -1580,7 +1630,7 @@ PlusStatus QPlusSegmentationParameterDialog::SetROI(unsigned int roi[4])
   // Validate the set region of interest (e.g., the image is padded with the opening bar size)
   // but only if a valid frame size is already set (otherwise we could overwrite the region of interest
   // if the region is initialized before the frame size)
-  unsigned int* frameSize = m_PatternRecognition->GetFidSegmentation()->GetFrameSize();
+  FrameSizeType frameSize = m_PatternRecognition->GetFidSegmentation()->GetFrameSize();
   if (frameSize[0] > 0 && frameSize[1] > 0)
   {
     m_PatternRecognition->GetFidSegmentation()->ValidateRegionOfInterest();
