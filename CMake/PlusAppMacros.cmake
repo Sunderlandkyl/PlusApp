@@ -156,7 +156,10 @@ function(plus_install_runtime_dependencies)
     # when they all exist. On Unix an executable carries no extension, which
     # tells them apart from the configuration files and logs that share the
     # directory.
-    file(GLOB _plus_candidates \"${_runtime_directory}/*\")
+    set(_plus_candidates)
+    if(NOT \"${_runtime_directory}\" STREQUAL \"\")
+      file(GLOB _plus_candidates \"${_runtime_directory}/*\")
+    endif()
     foreach(_plus_candidate IN LISTS _plus_candidates)
       get_filename_component(_plus_name \"\${_plus_candidate}\" NAME)
       if(NOT IS_DIRECTORY \"\${_plus_candidate}\" AND NOT _plus_name MATCHES \"[.]\")
