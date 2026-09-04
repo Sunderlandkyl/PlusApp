@@ -102,7 +102,7 @@ function(plus_install_runtime_dependencies)
   # windowing system. Shipping these makes a package that refuses to run on
   # any machine whose versions differ.
   set(_pre_exclude
-    "^lib(c|m|dl|rt|pthread|util|resolv|gcc_s|stdc\+\+)\."
+    "^lib(c|m|dl|rt|pthread|util|resolv|gcc_s|stdc[+][+])[.]"
     "^ld-linux"
     "^libSystem"
     )
@@ -111,7 +111,7 @@ function(plus_install_runtime_dependencies)
     "libGL" "libGLX" "libEGL" "libOpenGL" "libGLdispatch"
     "libX11" "libXext" "libXrender" "libxcb" "libxkbcommon"
     "libfontconfig" "libfreetype" "libdbus-1" "libglib" "libgobject"
-    "libz\." "libexpat" "libuuid" "libdrm"
+    "libz[.]" "libexpat" "libuuid" "libdrm"
     )
 
   install(CODE "
@@ -127,7 +127,7 @@ function(plus_install_runtime_dependencies)
       message(WARNING \"These runtime dependencies were not found and are not in the package: \${_unresolved}\")
     endif()
     foreach(_dependency IN LISTS _resolved)
-      if(_dependency MATCHES \"^(.*\\.framework)/\")
+      if(_dependency MATCHES \"^(.*[.]framework)/\")
         # Keep a macOS framework whole, minus its headers.
         file(INSTALL \"\${CMAKE_MATCH_1}\"
           DESTINATION \"\${CMAKE_INSTALL_PREFIX}/${PLUSAPP_INSTALL_LIB_DIR}\"
