@@ -161,7 +161,10 @@ ELSEIF(UNIX AND NOT APPLE)
   # The package carries its own copies of VTK, ITK and Qt, so it depends only
   # on the system libraries deliberately left out of it.
   SET(CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF)
-  SET(CPACK_DEBIAN_PACKAGE_DEPENDS "libgl1, libxcb-xinerama0, libxkbcommon-x11-0, libxcb-icccm4, libxcb-image0, libxcb-keysyms1, libxcb-render-util0, libfontconfig1, libdbus-1-3")
+  # The libraries the package deliberately does not carry, because they belong
+  # to the machine rather than to Plus. libgssapi-krb5-2 is here because Qt's
+  # network module links it and a minimal system does not have it.
+  SET(CPACK_DEBIAN_PACKAGE_DEPENDS "libgl1, libxcb-xinerama0, libxkbcommon-x11-0, libxcb-icccm4, libxcb-image0, libxcb-keysyms1, libxcb-render-util0, libfontconfig1, libdbus-1-3, libglib2.0-0, libgssapi-krb5-2")
   SET(CPACK_DEBIAN_COMPRESSION_TYPE gzip)
   SET(CPACK_DEBIAN_PACKAGE_SECTION science)
   SET(CPACK_DEBIAN_PACKAGE_PRIORITY optional)

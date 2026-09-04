@@ -54,12 +54,22 @@ function(plus_install_qt_runtime)
     return()
   endif()
 
+  # The offscreen plugin as well, when Qt ships one. It costs a few kilobytes
+  # and is what makes the package usable over a connection with no display, by
+  # a test harness or on a machine with no X server at all.
+  set(_plugins ${_plugin})
+  if(TARGET Qt5::QOffscreenIntegrationPlugin)
+    list(APPEND _plugins Qt5::QOffscreenIntegrationPlugin)
+  endif()
+
   # Qt looks for plugins in a "platforms" directory beside the executable.
-  install(FILES $<TARGET_FILE:${_plugin}>
-    DESTINATION ${PLUSAPP_INSTALL_BIN_DIR}/platforms
-    COMPONENT RuntimeLibraries
-    )
-  set_property(GLOBAL APPEND PROPERTY PLUSAPP_RUNTIME_MODULES $<TARGET_FILE:${_plugin}>)
+  foreach(_each IN LISTS _plugins)
+    install(FILES $<TARGET_FILE:${_each}>
+      DESTINATION ${PLUSAPP_INSTALL_BIN_DIR}/platforms
+      COMPONENT RuntimeLibraries
+      )
+    set_property(GLOBAL APPEND PROPERTY PLUSAPP_RUNTIME_MODULES $<TARGET_FILE:${_each}>)
+  endforeach()
 endfunction()
 
 # plus_register_runtime_executable(<target>...)
@@ -114,6 +124,8 @@ function(plus_install_runtime_dependencies)
     "libz[.]" "libexpat" "libuuid" "libdrm"
     )
 
+  set(_runtime_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+
   # Every one of these lists is written verbatim into cmake_install.cmake, so
   # each entry has to arrive there quoted. An unquoted regex containing a
   # parenthesis or a semicolon is a syntax error in the generated script, and
@@ -126,8 +138,35 @@ function(plus_install_runtime_dependencies)
   endforeach()
 
   install(CODE "
+    # Normalize paths before matching them against each other. Without this a
+    # macOS framework reached through two different chains of \"..\" segments
+    # looks like two libraries with one name, and the scan stops with
+    # \"Multiple conflicting paths found\". Guarded because the policy does not
+    # exist in every CMake this project supports.
+    if(POLICY CMP0207)
+      cmake_policy(SET CMP0207 NEW)
+    endif()
+    set(_plus_executables${_executables_arguments})
+
+    # PlusLib's tools are packaged alongside PlusApp's and are built into the
+    # same directory, but they are not targets here, so they cannot be named.
+    # Nothing else drags in what only they need: a package built from the
+    # applications alone was missing libvtkIOImage, which PlusServer loads and
+    # no application does. Collect them from the build tree at install time,
+    # when they all exist. On Unix an executable carries no extension, which
+    # tells them apart from the configuration files and logs that share the
+    # directory.
+    file(GLOB _plus_candidates \"${_runtime_directory}/*\")
+    foreach(_plus_candidate IN LISTS _plus_candidates)
+      get_filename_component(_plus_name \"\${_plus_candidate}\" NAME)
+      if(NOT IS_DIRECTORY \"\${_plus_candidate}\" AND NOT _plus_name MATCHES \"[.]\")
+        list(APPEND _plus_executables \"\${_plus_candidate}\")
+      endif()
+    endforeach()
+    list(REMOVE_DUPLICATES _plus_executables)
+
     file(GET_RUNTIME_DEPENDENCIES
-      EXECUTABLES${_executables_arguments}
+      EXECUTABLES \${_plus_executables}
       MODULES${_modules_arguments}
       RESOLVED_DEPENDENCIES_VAR _resolved
       UNRESOLVED_DEPENDENCIES_VAR _unresolved
