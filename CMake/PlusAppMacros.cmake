@@ -114,14 +114,25 @@ function(plus_install_runtime_dependencies)
     "libz[.]" "libexpat" "libuuid" "libdrm"
     )
 
+  # Every one of these lists is written verbatim into cmake_install.cmake, so
+  # each entry has to arrive there quoted. An unquoted regex containing a
+  # parenthesis or a semicolon is a syntax error in the generated script, and
+  # an unquoted path breaks on the first space.
+  foreach(_list IN ITEMS _executables _modules _pre_exclude _post_exclude)
+    set(${_list}_arguments "")
+    foreach(_entry IN LISTS ${_list})
+      string(APPEND ${_list}_arguments " \"${_entry}\"")
+    endforeach()
+  endforeach()
+
   install(CODE "
     file(GET_RUNTIME_DEPENDENCIES
-      EXECUTABLES ${_executables}
-      MODULES ${_modules}
+      EXECUTABLES${_executables_arguments}
+      MODULES${_modules_arguments}
       RESOLVED_DEPENDENCIES_VAR _resolved
       UNRESOLVED_DEPENDENCIES_VAR _unresolved
-      PRE_EXCLUDE_REGEXES ${_pre_exclude}
-      POST_EXCLUDE_REGEXES ${_post_exclude}
+      PRE_EXCLUDE_REGEXES${_pre_exclude_arguments}
+      POST_EXCLUDE_REGEXES${_post_exclude_arguments}
       )
     if(_unresolved)
       message(WARNING \"These runtime dependencies were not found and are not in the package: \${_unresolved}\")
