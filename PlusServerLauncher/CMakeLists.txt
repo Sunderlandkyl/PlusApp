@@ -62,10 +62,10 @@ AddPlusQt5Executable( PlusServerLauncher ${APP_MODE}
   ${PlusServerLauncher_UI_SRCS} 
   ${PlusServerLauncher_QT_Resources}
   )
-SET_TARGET_PROPERTIES(PlusServerLauncher PROPERTIES COMPILE_DEFINTIIONS 
-  ${Qt5Widgets_COMPILE_DEFINITIONS} 
-  ${Qt5Network_COMPILE_DEFINITIONS}
-  )
+# The Qt compile definitions arrive through the Qt5:: imported targets that
+# this executable links, so there is nothing to set here. The property was
+# previously spelled COMPILE_DEFINTIIONS, which is not a property at all, so
+# it had never taken effect.
 target_include_directories(PlusServerLauncher PRIVATE 
   ${CMAKE_CURRENT_BINARY_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}

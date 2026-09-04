@@ -14,7 +14,7 @@ SET (SegmentationParameterDialogTest_LIBS
 
 ADD_EXECUTABLE(SegmentationParameterDialogTest SegmentationParameterDialogTest.cxx)
 SET_TARGET_PROPERTIES(SegmentationParameterDialogTest PROPERTIES 
-  COMPILE_DEFINTIIONS ${Qt5Widgets_COMPILE_DEFINITIONS}
+  COMPILE_DEFINITIONS "${Qt5Widgets_COMPILE_DEFINITIONS}"
   FOLDER Tests
   )
 TARGET_LINK_LIBRARIES(SegmentationParameterDialogTest PRIVATE ${SegmentationParameterDialogTest_LIBS})

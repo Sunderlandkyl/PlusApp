@@ -6,7 +6,7 @@ SET RETURN_CODE=0
 
 REM First we need to build a Release version 
 
-"${CMAKE_MAKE_PROGRAM}" ALL_BUILD.vcxproj /p:Configuration=Release /target:build
+"${CMAKE_COMMAND}" --build . ${PLUSAPP_BUILD_CONFIG_ARG}
 IF ERRORLEVEL 1 GOTO BUILDFAILED
 
 :BUILDDOCUMENTATION
@@ -18,7 +18,7 @@ ECHO User manual generation DONE
 
 :PACKAGE
 REM Build the package 
-"${CMAKE_CPACK_COMMAND}" --config ./CPackConfig.cmake
+"${CMAKE_CPACK_COMMAND}" ${PLUSAPP_CTEST_CONFIG_ARG} --config ./CPackConfig.cmake
 IF ERRORLEVEL 1  GOTO PACKAGINGFAILED
 ECHO Packaging DONE
 

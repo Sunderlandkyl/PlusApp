@@ -329,12 +329,11 @@ IF(WIN32)
     DESTINATION ${PLUSAPP_INSTALL_BIN_DIR}
     COMPONENT Scripts
    )
-ELSEIF(UNIX AND NOT APPLE)
-  INSTALL(FILES ${QT_ROOT_DIR}/plugins/platforms/libqxcb${CMAKE_SHARED_LIBRARY_SUFFIX}
-    DESTINATION ${PLUSAPP_INSTALL_BIN_DIR}/platforms
-    COMPONENT RuntimeLibraries
-    )
 ENDIF()
+# The Qt platform plugin is installed by plus_install_qt_runtime(). It used to
+# be named through QT_ROOT_DIR, which is derived from the Qt 4 variable
+# QT_MOC_EXECUTABLE and is therefore empty under Qt 5, so this asked to install
+# "/plugins/platforms/libqxcb.so".
 
 IF(PLUSAPP_INSTALL_CONFIG_DIR)
   INSTALL(FILES ${PLUSLIB_CONFIG_FILES}

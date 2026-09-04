@@ -1,20 +1,24 @@
 #!/bin/bash
 
-# First we need to build a Release version
-${CMAKE_COMMAND} --build . --config Release
-
-# Build documentation
-if [ "${BUILD_DOCUMENTATION}" == "ON"]; then
-  ./CreateUserManual.sh
-  echo User manual generation DONE
-fi
-
-# Build the package
-"${CMAKE_CPACK_COMMAND}" --config ./CPackConfig.cmake
+# Build first, in the configuration the package is made from.
+"${CMAKE_COMMAND}" --build . ${PLUSAPP_BUILD_CONFIG_ARG}
 if [ $? -ne 0 ]; then
-  echo Unable to complete package
+  echo "ERROR: Build failed"
   exit 1
 fi
 
-echo Package generation is successfully completed.
+# Build the documentation. The test needs a space before the closing bracket,
+# without which bash reports a missing "]" and the branch never runs.
+if [ "${BUILD_DOCUMENTATION}" == "ON" ]; then
+  ./CreateUserManual.sh
+  echo "User manual generation DONE"
+fi
+
+"${CMAKE_CPACK_COMMAND}" ${PLUSAPP_CTEST_CONFIG_ARG} --config ./CPackConfig.cmake
+if [ $? -ne 0 ]; then
+  echo "ERROR: Unable to complete package"
+  exit 1
+fi
+
+echo "Package generation is successfully completed."
 exit 0

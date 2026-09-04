@@ -1,0 +1,20 @@
+# Read by CPack once per generator, so that settings which differ between the
+# packages produced from one build can each be given their own value.
+
+if(CPACK_GENERATOR STREQUAL "DEB")
+  # A Debian package installs into a fixed location, and this one carries its
+  # own copies of VTK, ITK and Qt. Keeping it under /opt means those copies
+  # cannot shadow the distribution's.
+  set(_package_dir "@CPACK_DEBIAN_PACKAGE_NAME@")
+  if(NOT _package_dir)
+    set(_package_dir "plusapp")
+  endif()
+  set(CPACK_PACKAGING_INSTALL_PREFIX "/opt/${_package_dir}")
+else()
+  # The archives and the disk image unpack wherever the user puts them.
+  set(CPACK_PACKAGING_INSTALL_PREFIX "/")
+endif()
+
+if(CPACK_GENERATOR STREQUAL "DragNDrop")
+  set(CPACK_DMG_VOLUME_NAME "${CPACK_PACKAGE_FILE_NAME}")
+endif()

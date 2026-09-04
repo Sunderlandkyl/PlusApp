@@ -116,7 +116,6 @@ AddPlusQt5Executable(fCal ${APP_MODE}
   ${fCal_UI_SRCS} 
   ${fCal_QT_Resources}
   )
-SET_TARGET_PROPERTIES(fCal PROPERTIES COMPILE_DEFINTIIONS ${Qt5Widgets_DEFINITIONS})
 IF(NOT VTK_VERSION VERSION_LESS 9.0.0)
   # vtk_module_autoinit is needed
   vtk_module_autoinit(TARGETS fCal MODULES 
@@ -133,7 +132,7 @@ target_include_directories(fCal PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/Toolboxes
   )
 
-IF(NOT (MSVC OR ${CMAKE_GENERATOR} MATCHES "Xcode"))
+IF(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(fCal PRIVATE -ftemplate-depth=5000)
 ENDIF()
 

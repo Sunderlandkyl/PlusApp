@@ -1,6 +1,6 @@
-PROJECT(PlusApp)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.20...4.0)
 
-CMAKE_MINIMUM_REQUIRED(VERSION 3.10.0)
+PROJECT(PlusApp LANGUAGES C CXX)
 
 INCLUDE(${CMAKE_CURRENT_SOURCE_DIR}/CMake/PlusAppMacros.cmake)
 
@@ -26,12 +26,15 @@ SET(PLUSAPP_VERSION_PATCH ${PLUSLIB_VERSION_PATCH})
 SET(PLUSAPP_VERSION ${PLUSAPP_VERSION_MAJOR}.${PLUSAPP_VERSION_MINOR}.${PLUSAPP_VERSION_PATCH})
 SET(PLUSAPP_REVISION ${PLUSLIB_REVISION})
 
-# Use solution folders.
-IF(MSVC OR ${CMAKE_GENERATOR} MATCHES "Xcode")
-  SET_PROPERTY(GLOBAL PROPERTY USE_FOLDERS ON)
-  SET_PROPERTY(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake Targets")
-  SET_PROPERTY(GLOBAL PROPERTY AUTOGEN_TARGETS_FOLDER "AutoGen (Qt) Targets")
-ENDIF()
+# Whether the generator picks its configuration at build time. Asking whether
+# the compiler is MSVC or the generator is called Xcode is a parse error with
+# any generator whose name contains a space.
+GET_PROPERTY(PLUS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+
+# Ignored by generators that have no concept of solution folders.
+SET_PROPERTY(GLOBAL PROPERTY USE_FOLDERS ON)
+SET_PROPERTY(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake Targets")
+SET_PROPERTY(GLOBAL PROPERTY AUTOGEN_TARGETS_FOLDER "AutoGen (Qt) Targets")
 
 SET(PLUSAPP_PACKAGE_EDITION "" CACHE STRING "Specifies a name that refers to the combination of hardware devices the created install package supports. The name is added to the package filename.")
 
@@ -91,10 +94,10 @@ FIND_PROGRAM(BASH_EXECUTABLE bash
     $ENV{${_x86env}}/Git/bin
   )
 MARK_AS_ADVANCED(BASH_EXECUTABLE)
-IF(BASH_EXECUTABLE)
-  EXECUTE_PROCESS(COMMAND "${BASH_EXECUTABLE}" -c "cd ${CMAKE_SOURCE_DIR} && ${CMAKE_SOURCE_DIR}/Utilities/SetupForDevelopment.sh copyOnly"
+IF(BASH_EXECUTABLE AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+  EXECUTE_PROCESS(COMMAND "${BASH_EXECUTABLE}" -c "cd '${CMAKE_SOURCE_DIR}' && ./Utilities/SetupForDevelopment.sh copyOnly"
     OUTPUT_VARIABLE _bashOutput
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
 ENDIF()
 
@@ -140,11 +143,7 @@ ENDIF()
 # --------------------------------------------------------------------------
 # Standard CMake option for building libraries shared or static by default.
 # --------------------------------------------------------------------------
-OPTION(BUILD_SHARED_LIBS
-  "Build with shared libraries."
-  ${VTK_BUILD_SHARED_LIBS}
-  ${ITK_BUILD_SHARED_LIBS}
-  )
+OPTION(BUILD_SHARED_LIBS "Build with shared libraries." ON)
 
 # --------------------------------------------------------------------------
 # Configure output paths for libraries and executables.
@@ -164,13 +163,12 @@ IF(NOT DEFINED CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
   SET(PLUS_ARCHIVE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib CACHE PATH "Single output directory for building all archives." FORCE)
 ENDIF()
 
-IF(MSVC OR ${CMAKE_GENERATOR} MATCHES "Xcode")
-  SET(TEST_EXECUTABLE_OUTPUT_PATH "${PLUS_EXECUTABLE_OUTPUT_PATH}/Release")
-ELSE()
-  SET(TEST_EXECUTABLE_OUTPUT_PATH "${PLUS_EXECUTABLE_OUTPUT_PATH}")
+# Default the install prefix into the build tree, but only when the user has
+# not chosen one. This used to be assigned unconditionally, so -DCMAKE_INSTALL_PREFIX
+# on the command line was discarded.
+IF(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+  SET(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/Install" CACHE PATH "Install path prefix" FORCE)
 ENDIF()
-
-SET(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/Install)
 SET(INSTALL_DESTINATION_DIR "PlusApp_v${PLUSAPP_VERSION_MAJOR}.${PLUSAPP_VERSION_MINOR}.${PLUSAPP_VERSION_PATCH}")
 
 OPTION(PLUSAPP_BUILD_DiagnosticTools "Build the DiagnosticTools" ON)
@@ -193,8 +191,10 @@ MACRO(GENERATE_HELP_DOC TARGET_NAME)
     ADD_CUSTOM_COMMAND(
       TARGET ${TARGET_NAME}
       POST_BUILD
-      COMMAND $<TARGET_FILE:${TARGET_NAME}> --help > ${TARGET_NAME}Help.txt
-      WORKING_DIRECTORY ${PLUS_EXECUTABLE_OUTPUT_PATH}/Doc/Help
+      COMMAND ${CMAKE_COMMAND}
+        -DPLUS_HELP_EXECUTABLE=$<TARGET_FILE:${TARGET_NAME}>
+        -DPLUS_HELP_OUTPUT=${PLUS_EXECUTABLE_OUTPUT_PATH}/Doc/Help/${TARGET_NAME}Help.txt
+        -P ${CMAKE_SOURCE_DIR}/CMake/PlusRunHelp.cmake
       )
   ENDIF()
 ENDMACRO()
@@ -251,8 +251,9 @@ SET(QT_VERSION_MAJOR ${Qt5Core_VERSION_MAJOR})
 SET(QT_VERSION_MINOR ${Qt5Core_VERSION_MINOR})
 SET(QT_VERSION_PATCH ${Qt5Core_VERSION_PATCH})
 SET(QT_VERSION ${Qt5Core_VERSION})
-GET_FILENAME_COMPONENT(QT_BINARY_DIR ${QT_MOC_EXECUTABLE} DIRECTORY)
-GET_FILENAME_COMPONENT(QT_ROOT_DIR ${QT_BINARY_DIR} DIRECTORY)
+GET_TARGET_PROPERTY(_qmake_location Qt5::qmake IMPORTED_LOCATION)
+GET_FILENAME_COMPONENT(QT_BINARY_DIR "${_qmake_location}" DIRECTORY)
+GET_FILENAME_COMPONENT(QT_ROOT_DIR "${QT_BINARY_DIR}" DIRECTORY)
 
 # Instruct CMake to run tools automatically when needed.
 SET(CMAKE_AUTOMOC ON)
@@ -352,6 +353,16 @@ CONFIGURE_FILE(
   )
 
 # Generate convenience files for automatic build, test, and packaging
+IF(PLUS_MULTI_CONFIG)
+  SET(PLUSAPP_BUILD_CONFIG_ARG "--config Release")
+  SET(PLUSAPP_CTEST_CONFIG_ARG "-C Release")
+ELSE()
+  # A single-configuration build has one configuration, chosen at configure
+  # time, so naming one here would at best be redundant and at worst wrong.
+  SET(PLUSAPP_BUILD_CONFIG_ARG "")
+  SET(PLUSAPP_CTEST_CONFIG_ARG "")
+ENDIF()
+
 IF(WIN32)
   CONFIGURE_FILE(
     ${CMAKE_CURRENT_SOURCE_DIR}/CreatePackage.bat.in
@@ -383,3 +394,26 @@ ENDIF()
 # Install files
 # --------------------------------------------------------------------------
 INCLUDE(InstallFiles.cmake)
+
+#-----------------------------------------------------------------------------
+# Runtime dependencies
+#
+# Has to come after every target is defined, and after the install rules that
+# place the executables, because the libraries are resolved from the built
+# executables themselves.
+# --------------------------------------------------------------------------
+FOREACH(_app PointSetExtractor SpatialSensorFusion PlusServerLauncher fCal
+             DiagDataCollection TrackingDataServer)
+  plus_register_runtime_executable(${_app})
+ENDFOREACH()
+
+# PlusLib's own tools travel in the same package and pull in the same
+# libraries, so they are resolved together with PlusApp's.
+FOREACH(_tool PlusServer PlusServerRemoteControl)
+  IF(TARGET ${_tool})
+    plus_register_runtime_executable(${_tool})
+  ENDIF()
+ENDFOREACH()
+
+plus_install_qt_runtime()
+plus_install_runtime_dependencies()
