@@ -211,12 +211,14 @@ INCLUDE (${CMAKE_CURRENT_SOURCE_DIR}/CPackConfig.cmake)
   # to always look for includes there:
 SET(CMAKE_INCLUDE_CURRENT_DIR ON)
 
+# XmlPatterns is deliberately absent: nothing in PlusApp or PlusLib uses it,
+# and it is a separate Qt module that several distributions do not ship, so
+# requiring it only produced configure failures.
 SET(PLUSAPP_QT_COMPONENTS ${PLUSLIB_QT_COMPONENTS}
   Core
   Gui
   Network
   Sql
-  XmlPatterns
   OpenGL
   Test
   Widgets
