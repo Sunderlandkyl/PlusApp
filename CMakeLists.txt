@@ -2,7 +2,9 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.20...4.0)
 
 PROJECT(PlusApp LANGUAGES C CXX)
 
-INCLUDE(${CMAKE_CURRENT_SOURCE_DIR}/CMake/PlusAppMacros.cmake)
+LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMake")
+INCLUDE(PlusAppMacros)
+INCLUDE(PlusGitInfo)
 
 # ------------------------------------------------------------------------
 # PlusLib
@@ -102,43 +104,15 @@ IF(BASH_EXECUTABLE AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
 ENDIF()
 
 # --------------------------------------------------------------------------
-# Find git for revision information status and automatic update of the repository
+# Revision information
+#
+# Shares the implementation with PlusLib. Every git call is checked, and all
+# four variables fall back to "NA". The version this replaces scraped the date
+# out of "git show" with an unguarded regex, which is a hard configure error
+# on empty output, and left the date undefined when git was missing, which put
+# an empty field in the middle of the package file name.
 # --------------------------------------------------------------------------
-IF(PLUSAPP_OFFLINE_BUILD)
-  SET(PLUSAPP_REVISION "NA")
-  SET(PLUSAPP_SHORT_REVISION "NA")
-ELSE()
-  # Need git for the automatic update of the repository
-  FIND_PACKAGE(Git)
-  IF(Git_FOUND)
-    EXECUTE_PROCESS(COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
-      OUTPUT_VARIABLE PLUSAPP_REVISION
-      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-      )
-    STRING(REGEX REPLACE "\n$" "" PLUSAPP_REVISION "${PLUSAPP_REVISION}")
-    STRING(REGEX REPLACE "\r$" "" PLUSAPP_REVISION "${PLUSAPP_REVISION}")
-
-    MESSAGE(STATUS "Current git hash is ${PLUSAPP_REVISION}")
-
-    EXECUTE_PROCESS(COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
-      OUTPUT_VARIABLE PLUSAPP_SHORT_REVISION
-      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-      )
-    STRING(REGEX REPLACE "\n$" "" PLUSAPP_SHORT_REVISION "${PLUSAPP_SHORT_REVISION}")
-    STRING(REGEX REPLACE "\r$" "" PLUSAPP_SHORT_REVISION "${PLUSAPP_SHORT_REVISION}")
-
-    EXECUTE_PROCESS(COMMAND ${GIT_EXECUTABLE} show ${PLUSAPP_REVISION} --date=iso8601
-      OUTPUT_VARIABLE _git_show_output
-      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-      )
-    STRING(REGEX MATCH "([0-9])+-([0-9]+)-([0-9]+)" PLUSAPP_COMMIT_DATE ${_git_show_output})
-    STRING(REPLACE "-" "" PLUSAPP_COMMIT_DATE_NO_DASHES ${PLUSAPP_COMMIT_DATE})
-  ELSE()
-    MESSAGE(WARNING "Git tool not found. Cannot retrieve revision information from repository")
-    SET(PLUSAPP_REVISION "NA")
-    SET(PLUSAPP_SHORT_REVISION "NA")
-  ENDIF()
-ENDIF()
+plus_git_info(PLUSAPP)
 
 # --------------------------------------------------------------------------
 # Standard CMake option for building libraries shared or static by default.
