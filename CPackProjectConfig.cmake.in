@@ -17,4 +17,9 @@ endif()
 
 if(CPACK_GENERATOR STREQUAL "DragNDrop")
   set(CPACK_DMG_VOLUME_NAME "${CPACK_PACKAGE_FILE_NAME}")
+  # Put one folder at the root of the disk image rather than loose bin, lib,
+  # config and data directories. Opening the image should show a single thing
+  # to drag out; four sibling folders read as an archive someone forgot to
+  # wrap, and leave the reader guessing which of them to copy.
+  set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY 1)
 endif()
