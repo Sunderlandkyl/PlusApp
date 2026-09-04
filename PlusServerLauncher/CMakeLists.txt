@@ -50,10 +50,17 @@ IF(TARGET igtlioLogic)
   LIST(APPEND PlusServerLauncher_LIBS igtlioLogic)
 ENDIF()
 
-SET (APP_MODE MACOSX_BUNDLE)
+# WIN32 asks for a windowed application with no console attached. macOS gets a
+# plain executable rather than a .app: the package is a directory of tools,
+# with the libraries in a sibling lib/ directory that every executable reaches
+# through "@executable_path/../lib". A bundle puts its executable two levels
+# further down, where that path resolves to nothing, and macOS translocates an
+# unsigned bundle launched from a disk image into a temporary directory of its
+# own, so a bundle would have to carry a private copy of Qt, VTK and ITK to
+# work at all.
+SET(APP_MODE)
 IF(WIN32)
-  # Create a windowed application (do not show a console)
-  SET (APP_MODE WIN32)
+  SET(APP_MODE WIN32)
 ENDIF()
 
 AddPlusQt5Executable( PlusServerLauncher ${APP_MODE} 
