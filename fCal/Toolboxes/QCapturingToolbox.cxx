@@ -723,7 +723,7 @@ void QCapturingToolbox::InitCaptureDeviceScrollArea()
   m_GridLayout = new QGridLayout(m_GridWidget);
   m_GridLayout->setObjectName(tr("captureWidgetLayout"));
   m_GridLayout->setHorizontalSpacing(0);
-  m_GridLayout->setMargin(0);
+  m_GridLayout->setContentsMargins(0, 0, 0, 0);
   m_GridLayout->setAlignment(Qt::AlignTop);
 
   m_ScrollArea = new QScrollArea(this);

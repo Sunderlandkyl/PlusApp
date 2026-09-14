@@ -32,7 +32,6 @@ See License.txt for details.
 #include <QMessageBox>
 #include <QNetworkInterface>
 #include <QProcess>
-#include <QRegExp>
 #include <QStatusBar>
 #include <QStringList>
 #include <QTimer>
@@ -362,7 +361,7 @@ bool PlusServerLauncherMainWindow::StartServer(const QString& configFilePath, in
   std::string plusServerLocation = vtksys::SystemTools::GetFilenamePath(plusServerExecutable);
   newServerProcess->setWorkingDirectory(QString(plusServerLocation.c_str()));
 
-  connect(newServerProcess, SIGNAL(error(QProcess::ProcessError)), this, SLOT(ErrorReceived(QProcess::ProcessError)));
+  connect(newServerProcess, SIGNAL(errorOccurred(QProcess::ProcessError)), this, SLOT(ErrorReceived(QProcess::ProcessError)));
   connect(newServerProcess, SIGNAL(finished(int, QProcess::ExitStatus)), this, SLOT(ServerExecutableFinished(int, QProcess::ExitStatus)));
 
   // PlusServerLauncher wants at least LOG_LEVEL_INFO to parse status information from the PlusServer executable
@@ -596,7 +595,7 @@ bool PlusServerLauncherMainWindow::StopServer(const QString& configFilePath)
 
   disconnect(process, SIGNAL(readyReadStandardOutput()), this, SLOT(StdOutMsgReceived()));
   disconnect(process, SIGNAL(readyReadStandardError()), this, SLOT(StdErrMsgReceived()));
-  disconnect(process, SIGNAL(error(QProcess::ProcessError)), this, SLOT(ErrorReceived(QProcess::ProcessError)));
+  disconnect(process, SIGNAL(errorOccurred(QProcess::ProcessError)), this, SLOT(ErrorReceived(QProcess::ProcessError)));
   disconnect(process, SIGNAL(finished(int, QProcess::ExitStatus)), this, SLOT(ServerExecutableFinished(int, QProcess::ExitStatus)));
 
   RemoveServerProcess(process);

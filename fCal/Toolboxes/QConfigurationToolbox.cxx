@@ -57,13 +57,13 @@ QConfigurationToolbox::QConfigurationToolbox(fCalMainWindow* aParentMainWindow, 
 
   // Insert widgets into placeholders
   QGridLayout* gridDeviceSetSelection = new QGridLayout(ui.deviceSetSelectionWidget);
-  gridDeviceSetSelection->setMargin(0);
+  gridDeviceSetSelection->setContentsMargins(0, 0, 0, 0);
   gridDeviceSetSelection->setSpacing(4);
   gridDeviceSetSelection->addWidget(m_DeviceSetSelectorWidget);
   ui.deviceSetSelectionWidget->setLayout(gridDeviceSetSelection);
 
   QGridLayout* gridToolStateDisplay = new QGridLayout(ui.toolStateDisplayWidget);
-  gridToolStateDisplay->setMargin(0);
+  gridToolStateDisplay->setContentsMargins(0, 0, 0, 0);
   gridToolStateDisplay->setSpacing(4);
   gridToolStateDisplay->addWidget(m_ToolStateDisplayWidget);
   ui.toolStateDisplayWidget->setLayout(gridToolStateDisplay);
@@ -274,7 +274,7 @@ void QConfigurationToolbox::PopOutToggled(bool aOn)
     m_ToolStatePopOutWindow->setStyleSheet("QWidget { background-color: rgb(255, 255, 255); }");
 
     QGridLayout* gridToolStateDisplay = new QGridLayout(m_ToolStatePopOutWindow);
-    gridToolStateDisplay->setMargin(0);
+    gridToolStateDisplay->setContentsMargins(0, 0, 0, 0);
     gridToolStateDisplay->setSpacing(4);
     gridToolStateDisplay->addWidget(m_ToolStateDisplayWidget);
     m_ToolStatePopOutWindow->setLayout(gridToolStateDisplay);
@@ -295,7 +295,7 @@ void QConfigurationToolbox::PopOutToggled(bool aOn)
   {
     // Insert tool state display back in toolbox
     QGridLayout* gridToolStateDisplay = new QGridLayout(ui.toolStateDisplayWidget);
-    gridToolStateDisplay->setMargin(0);
+    gridToolStateDisplay->setContentsMargins(0, 0, 0, 0);
     gridToolStateDisplay->setSpacing(4);
     gridToolStateDisplay->addWidget(m_ToolStateDisplayWidget);
     ui.toolStateDisplayWidget->setLayout(gridToolStateDisplay);

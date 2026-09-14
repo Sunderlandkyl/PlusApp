@@ -4,8 +4,8 @@ SET( ConfigFilesDir ${PLUSLIB_DATA_DIR}/ConfigFiles )
 # --------------------------------------------------------------------------
 # SegmentationParameterDialogTest
 SET (SegmentationParameterDialogTest_LIBS 
-  Qt5::Widgets
-  Qt5::Test
+  Qt${QT_VERSION_MAJOR}::Widgets
+  Qt${QT_VERSION_MAJOR}::Test
   PlusWidgets
   vtkPlusCommon
   vtkPlusCalibration
@@ -14,7 +14,6 @@ SET (SegmentationParameterDialogTest_LIBS
 
 ADD_EXECUTABLE(SegmentationParameterDialogTest SegmentationParameterDialogTest.cxx)
 SET_TARGET_PROPERTIES(SegmentationParameterDialogTest PROPERTIES 
-  COMPILE_DEFINITIONS "${Qt5Widgets_COMPILE_DEFINITIONS}"
   FOLDER Tests
   )
 TARGET_LINK_LIBRARIES(SegmentationParameterDialogTest PRIVATE ${SegmentationParameterDialogTest_LIBS})

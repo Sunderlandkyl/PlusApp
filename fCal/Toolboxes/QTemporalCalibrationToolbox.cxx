@@ -946,7 +946,7 @@ void QTemporalCalibrationToolbox::ShowPlotsToggled(bool aOn)
     TemporalCalibrationPlotsWindow->installEventFilter(this);
 
     QGridLayout* gridPlotLayout = new QGridLayout(TemporalCalibrationPlotsWindow);
-    gridPlotLayout->setMargin(0);
+    gridPlotLayout->setContentsMargins(0, 0, 0, 0);
     gridPlotLayout->setSpacing(4);
 
     // Uncalibrated chart view
@@ -1015,7 +1015,7 @@ void QTemporalCalibrationToolbox::ShowPlotsToggled(bool aOn)
 
     QWidget* actionBar = new QWidget();
     QHBoxLayout* layout = new QHBoxLayout(actionBar);
-    layout->setMargin(4);
+    layout->setContentsMargins(4, 4, 4, 4);
     layout->setSpacing(0);
     layout->addSpacerItem(new QSpacerItem(5, 5, QSizePolicy::MinimumExpanding, QSizePolicy::Fixed));
     this->SaveFileButton = new QPushButton(tr("Save..."));

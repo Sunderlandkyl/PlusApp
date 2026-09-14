@@ -70,9 +70,9 @@ SET (fCal_QT_Resources
 # --------------------------------------------------------------------------
 # Build the library
 SET(fCal_LIBS 
-  Qt5::Widgets
-  Qt5::Core
-  Qt5::Xml
+  Qt${QT_VERSION_MAJOR}::Widgets
+  Qt${QT_VERSION_MAJOR}::Core
+  Qt${QT_VERSION_MAJOR}::Xml
   PlusWidgets
   vtkPlusCommon
   itkvnl 

@@ -16,7 +16,7 @@
 #include "vtksys/Encoding.hxx"
 
 #include <QApplication>
-#include <QDesktopWidget>
+#include <QScreen>
 #include <QGridLayout>
 #include <QMessageBox>
 #include <QSpacerItem>
@@ -69,7 +69,7 @@ void DisplayMessage(QString msg, QString detail, bool isError)
   }
 
   // Set width to half of screen size
-  QRect rec = QApplication::desktop()->screenGeometry();
+  QRect rec = QApplication::primaryScreen()->geometry();
   QSpacerItem* horizontalSpacer = new QSpacerItem(0.5 * rec.width(), 0, QSizePolicy::Minimum, QSizePolicy::Fixed);
   QGridLayout* layout = (QGridLayout*)msgBox.layout();
   layout->addItem(horizontalSpacer, layout->rowCount(), 0, 1, layout->columnCount());

@@ -13,7 +13,7 @@ See License.txt for details.
 #include "PlusConfigure.h"
 
 #include <QWidget>
-#include <QTime>
+#include <QElapsedTimer>
 
 class vtkPlusPivotCalibrationAlgo;
 class vtkMatrix4x4;
@@ -96,7 +96,7 @@ protected:
   int                                           m_CurrentPointNumber;
   QString                                       m_StylusPositionString;
   vtkSmartPointer<vtkMatrix4x4>                 m_PreviousStylusToReferenceTransformMatrix;
-  QTime                                         m_CalibrationStartupDelayStartTime;
+  QElapsedTimer                                 m_CalibrationStartupDelayStartTime;
 
 protected:
   Ui::StylusCalibrationToolbox ui;

@@ -12,12 +12,12 @@ FUNCTION(AddPlusQt5Executable _exec_name)
     endforeach(COMPONENT ${PLUSAPP_QT_COMPONENTS})
   ENDIF()
 
-  IF(TARGET Qt5::windeployqt)
+  IF(TARGET Qt${QT_VERSION_MAJOR}::windeployqt)
       # execute windeployqt in a tmp directory after build
       ADD_CUSTOM_COMMAND(TARGET ${_exec_name}
           POST_BUILD
           COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_CURRENT_BINARY_DIR}/windeployqt"
-          COMMAND Qt5::windeployqt ${PLUSAPP_QT_COMPONENTS_ARGS} --dir "${CMAKE_CURRENT_BINARY_DIR}/windeployqt" "$<TARGET_FILE_DIR:${_exec_name}>/$<TARGET_FILE_NAME:${_exec_name}>"
+          COMMAND Qt${QT_VERSION_MAJOR}::windeployqt ${PLUSAPP_QT_COMPONENTS_ARGS} --dir "${CMAKE_CURRENT_BINARY_DIR}/windeployqt" "$<TARGET_FILE_DIR:${_exec_name}>/$<TARGET_FILE_NAME:${_exec_name}>"
           COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_BINARY_DIR}/windeployqt $<TARGET_FILE_DIR:${_exec_name}>
       )
 
@@ -34,7 +34,7 @@ ENDFUNCTION()
 # plus_install_qt_runtime(<executable target>...)
 #
 # Put the Qt platform plugin into the package. Everything Qt-related used to
-# happen inside AddPlusQt5Executable, guarded on the Qt5::windeployqt target,
+# happen inside AddPlusQt5Executable, guarded on the windeployqt target,
 # which only exists on Windows; a Linux or macOS package therefore shipped
 # without Qt at all.
 function(plus_install_qt_runtime)
@@ -44,9 +44,9 @@ function(plus_install_qt_runtime)
   endif()
 
   if(APPLE)
-    set(_plugin Qt5::QCocoaIntegrationPlugin)
+    set(_plugin Qt${QT_VERSION_MAJOR}::QCocoaIntegrationPlugin)
   else()
-    set(_plugin Qt5::QXcbIntegrationPlugin)
+    set(_plugin Qt${QT_VERSION_MAJOR}::QXcbIntegrationPlugin)
   endif()
 
   if(NOT TARGET ${_plugin})
@@ -58,8 +58,8 @@ function(plus_install_qt_runtime)
   # and is what makes the package usable over a connection with no display, by
   # a test harness or on a machine with no X server at all.
   set(_plugins ${_plugin})
-  if(TARGET Qt5::QOffscreenIntegrationPlugin)
-    list(APPEND _plugins Qt5::QOffscreenIntegrationPlugin)
+  if(TARGET Qt${QT_VERSION_MAJOR}::QOffscreenIntegrationPlugin)
+    list(APPEND _plugins Qt${QT_VERSION_MAJOR}::QOffscreenIntegrationPlugin)
   endif()
 
   # Qt looks for plugins in a "platforms" directory beside the executable.

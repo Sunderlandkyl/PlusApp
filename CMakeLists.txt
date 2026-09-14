@@ -188,6 +188,17 @@ SET(CMAKE_INCLUDE_CURRENT_DIR ON)
 # XmlPatterns is deliberately absent: nothing in PlusApp or PlusLib uses it,
 # and it is a separate Qt module that several distributions do not ship, so
 # requiring it only produced configure failures.
+# The Qt major version is the one PlusLib was built with, when PlusLib has
+# widgets; otherwise Qt 6 where it is available and Qt 5 elsewhere, with a
+# Qt5_DIR given on its own taken as the choice of Qt 5.
+IF(NOT QT_VERSION_MAJOR)
+  IF(Qt5_DIR AND NOT Qt6_DIR)
+    FIND_PACKAGE(QT NAMES Qt5 REQUIRED COMPONENTS Core)
+  ELSE()
+    FIND_PACKAGE(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core)
+  ENDIF()
+ENDIF()
+
 SET(PLUSAPP_QT_COMPONENTS ${PLUSLIB_QT_COMPONENTS}
   Core
   Gui
@@ -197,37 +208,43 @@ SET(PLUSAPP_QT_COMPONENTS ${PLUSLIB_QT_COMPONENTS}
   Test
   Widgets
   Xml
-  CACHE INTERNAL "" FORCE)
+  )
+IF(QT_VERSION_MAJOR EQUAL 6)
+  # QOpenGLWidget, the base of VTK's Qt widget, has a module of its own in Qt 6.
+  LIST(APPEND PLUSAPP_QT_COMPONENTS OpenGLWidgets)
+ENDIF()
 LIST(REMOVE_DUPLICATES PLUSAPP_QT_COMPONENTS)
-FIND_PACKAGE(Qt5 REQUIRED COMPONENTS ${PLUSAPP_QT_COMPONENTS})
+SET(PLUSAPP_QT_COMPONENTS ${PLUSAPP_QT_COMPONENTS} CACHE INTERNAL "" FORCE)
+FIND_PACKAGE(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS ${PLUSAPP_QT_COMPONENTS})
+# Recorded for PlusAppConfig.cmake.
+SET(PLUSAPP_QT_DIR "${Qt${QT_VERSION_MAJOR}_DIR}")
 
-IF(Qt5_FOUND AND WIN32 AND TARGET Qt5::qmake AND NOT TARGET Qt5::windeployqt)
-  GET_TARGET_PROPERTY(_qt5_qmake_location Qt5::qmake IMPORTED_LOCATION)
+IF(WIN32 AND TARGET Qt${QT_VERSION_MAJOR}::qmake AND NOT TARGET Qt${QT_VERSION_MAJOR}::windeployqt)
+  GET_TARGET_PROPERTY(_qmake_location Qt${QT_VERSION_MAJOR}::qmake IMPORTED_LOCATION)
 
   EXECUTE_PROCESS(
-      COMMAND "${_qt5_qmake_location}" -query QT_INSTALL_PREFIX
+      COMMAND "${_qmake_location}" -query QT_INSTALL_PREFIX
       RESULT_VARIABLE return_code
-      OUTPUT_VARIABLE qt5_install_prefix
+      OUTPUT_VARIABLE qt_install_prefix
       OUTPUT_STRIP_TRAILING_WHITESPACE
   )
 
-  SET(imported_location "${qt5_install_prefix}/bin/windeployqt.exe")
+  SET(imported_location "${qt_install_prefix}/bin/windeployqt.exe")
 
   IF(EXISTS ${imported_location})
-      ADD_EXECUTABLE(Qt5::windeployqt IMPORTED)
+      ADD_EXECUTABLE(Qt${QT_VERSION_MAJOR}::windeployqt IMPORTED)
 
-      SET_TARGET_PROPERTIES(Qt5::windeployqt PROPERTIES
+      SET_TARGET_PROPERTIES(Qt${QT_VERSION_MAJOR}::windeployqt PROPERTIES
           IMPORTED_LOCATION ${imported_location}
       )
   ENDIF()
 ENDIF()
 
 # These variables are populated as part of our install script
-SET(QT_VERSION_MAJOR ${Qt5Core_VERSION_MAJOR})
-SET(QT_VERSION_MINOR ${Qt5Core_VERSION_MINOR})
-SET(QT_VERSION_PATCH ${Qt5Core_VERSION_PATCH})
-SET(QT_VERSION ${Qt5Core_VERSION})
-GET_TARGET_PROPERTY(_qmake_location Qt5::qmake IMPORTED_LOCATION)
+SET(QT_VERSION_MINOR ${Qt${QT_VERSION_MAJOR}Core_VERSION_MINOR})
+SET(QT_VERSION_PATCH ${Qt${QT_VERSION_MAJOR}Core_VERSION_PATCH})
+SET(QT_VERSION ${Qt${QT_VERSION_MAJOR}Core_VERSION})
+GET_TARGET_PROPERTY(_qmake_location Qt${QT_VERSION_MAJOR}::qmake IMPORTED_LOCATION)
 GET_FILENAME_COMPONENT(QT_BINARY_DIR "${_qmake_location}" DIRECTORY)
 GET_FILENAME_COMPONENT(QT_ROOT_DIR "${QT_BINARY_DIR}" DIRECTORY)
 

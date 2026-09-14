@@ -30,8 +30,8 @@ SET(PlusServerLauncher_QT_Resources
 # --------------------------------------------------------------------------
 # Build the library
 SET (PlusServerLauncher_LIBS 
-  Qt5::Widgets
-  Qt5::Network
+  Qt${QT_VERSION_MAJOR}::Widgets
+  Qt${QT_VERSION_MAJOR}::Network
   vtkPlusCommon
   PlusWidgets
   vtkPlusServer
@@ -69,7 +69,7 @@ AddPlusQt5Executable( PlusServerLauncher ${APP_MODE}
   ${PlusServerLauncher_UI_SRCS} 
   ${PlusServerLauncher_QT_Resources}
   )
-# The Qt compile definitions arrive through the Qt5:: imported targets that
+# The Qt compile definitions arrive through the imported Qt targets that
 # this executable links, so there is nothing to set here. The property was
 # previously spelled COMPILE_DEFINTIIONS, which is not a property at all, so
 # it had never taken effect.
