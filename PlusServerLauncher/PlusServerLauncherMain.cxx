@@ -187,7 +187,7 @@ int appMain(int argc, char* argv[])
   }
 
   // Start the application
-  PlusServerLauncherMainWindow mainWindow(0, 0, autoConnect, remoteControlServerPort);
+  PlusServerLauncherMainWindow mainWindow(nullptr, Qt::WindowFlags(), autoConnect, remoteControlServerPort);
   if (mainWindow.GetHideOnStartup())
   {
     mainWindow.hide();
