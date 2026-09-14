@@ -193,4 +193,83 @@ function(plus_install_runtime_dependencies)
     endforeach()"
     COMPONENT RuntimeLibraries
     )
+
+  if(APPLE)
+    plus_install_adhoc_signatures()
+  endif()
+endfunction()
+
+# plus_install_adhoc_signatures()
+#
+# Give every Mach-O file in the package an ad-hoc code signature, replacing
+# whatever it arrived with.
+#
+# The Qt frameworks and plugins from the Qt installer are signed with The Qt
+# Company's Developer ID. A file downloaded with a browser carries the
+# quarantine attribute, and for a quarantined library signed that way macOS
+# insists on a notarization ticket, which this package has no way to carry.
+# dyld then refuses the library with "library load disallowed by system
+# policy", and PlusServerLauncher stops before main(). The launcher itself
+# ran, because the linker had given it an ad-hoc signature, and ad-hoc code
+# is not subject to that check. Signing everything the same way makes the
+# whole package behave like the launcher did. This is not a substitute for
+# signing and notarizing with a Developer ID; it is what an unsigned package
+# has to do to run at all on a machine that downloaded it.
+#
+# Libraries and plugins first, then executables. The signature covers the
+# file's contents, so nothing may modify a file after this runs.
+function(plus_install_adhoc_signatures)
+  install(CODE "
+    find_program(_plus_codesign codesign)
+    if(NOT _plus_codesign)
+      message(WARNING \"codesign was not found, so the package keeps the signatures its files arrived with and may not load its Qt libraries on a machine that downloaded it.\")
+      return()
+    endif()
+
+    # A Mach-O file starts with one of these magic numbers: 64-bit little
+    # endian, 32-bit little endian, or a fat (universal) header.
+    set(_plus_macho_magics cffaedfe cefaedfe cafebabe)
+
+    # Everything under bin and lib, with the executables (the files directly
+    # in bin) sorted to the end so that they are signed after the libraries
+    # and plugins they load.
+    set(_plus_bin_dir \"\${CMAKE_INSTALL_PREFIX}/${PLUSAPP_INSTALL_BIN_DIR}\")
+    file(GLOB_RECURSE _plus_all_files LIST_DIRECTORIES false
+      \"\${CMAKE_INSTALL_PREFIX}/${PLUSAPP_INSTALL_LIB_DIR}/*\"
+      \"\${_plus_bin_dir}/*\")
+    set(_plus_lib_files)
+    set(_plus_bin_files)
+    foreach(_plus_file IN LISTS _plus_all_files)
+      get_filename_component(_plus_dir \"\${_plus_file}\" DIRECTORY)
+      if(_plus_dir STREQUAL _plus_bin_dir)
+        list(APPEND _plus_bin_files \"\${_plus_file}\")
+      else()
+        list(APPEND _plus_lib_files \"\${_plus_file}\")
+      endif()
+    endforeach()
+
+    set(_plus_signed 0)
+    foreach(_plus_file IN LISTS _plus_lib_files _plus_bin_files)
+      if(IS_SYMLINK \"\${_plus_file}\")
+        continue()
+      endif()
+      file(READ \"\${_plus_file}\" _plus_magic LIMIT 4 HEX)
+      list(FIND _plus_macho_magics \"\${_plus_magic}\" _plus_is_macho)
+      if(_plus_is_macho EQUAL -1)
+        continue()
+      endif()
+      execute_process(
+        COMMAND \"\${_plus_codesign}\" --force --sign - \"\${_plus_file}\"
+        RESULT_VARIABLE _plus_result
+        ERROR_VARIABLE _plus_error
+        OUTPUT_QUIET)
+      if(NOT _plus_result EQUAL 0)
+        message(WARNING \"Could not ad-hoc sign \${_plus_file}: \${_plus_error}\")
+      else()
+        math(EXPR _plus_signed \"\${_plus_signed} + 1\")
+      endif()
+    endforeach()
+    message(STATUS \"Ad-hoc signed \${_plus_signed} Mach-O files in the package.\")"
+    COMPONENT RuntimeLibraries
+    )
 endfunction()
