@@ -34,7 +34,7 @@ public:
   * \param aParentWindow Parent main window
   * \param aFlags widget flag
   */
-  QConfigurationToolbox(fCalMainWindow* aParentMainWindow, Qt::WindowFlags aFlags = 0);
+  QConfigurationToolbox(fCalMainWindow* aParentMainWindow, Qt::WindowFlags aFlags = Qt::WindowFlags());
 
   /*!
   * Destructor

@@ -33,7 +33,7 @@ public:
   * \param aParentMainWindow Parent main window
   * \param aFlags widget flag
   */
-  QVolumeReconstructionToolbox(fCalMainWindow* aParentMainWindow, Qt::WindowFlags aFlags = 0);
+  QVolumeReconstructionToolbox(fCalMainWindow* aParentMainWindow, Qt::WindowFlags aFlags = Qt::WindowFlags());
 
   /*! Destructor */
   ~QVolumeReconstructionToolbox();

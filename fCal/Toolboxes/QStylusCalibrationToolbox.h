@@ -34,7 +34,7 @@ public:
   * \param aParentMainWindow Parent main window
   * \param aFlags Widget flags
   */
-  QStylusCalibrationToolbox(fCalMainWindow* aParentMainWindow, Qt::WindowFlags aFlags = 0);
+  QStylusCalibrationToolbox(fCalMainWindow* aParentMainWindow, Qt::WindowFlags aFlags = Qt::WindowFlags());
 
   /*! Destructor */
   ~QStylusCalibrationToolbox();

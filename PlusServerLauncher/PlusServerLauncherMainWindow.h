@@ -55,7 +55,7 @@ public:
     \param aFlags widget flag
     \param remoteControlServerPort port number where launcher listens for remote control OpenIGTLink commands. 0 means use default port, -1 means do not start a remote control server.
   */
-  PlusServerLauncherMainWindow(QWidget* parent = 0, Qt::WindowFlags flags = 0, bool autoConnect = false, int remoteControlServerPort = RemoteControlServerPortUseDefault);
+  PlusServerLauncherMainWindow(QWidget* parent = 0, Qt::WindowFlags flags = Qt::WindowFlags(), bool autoConnect = false, int remoteControlServerPort = RemoteControlServerPortUseDefault);
   ~PlusServerLauncherMainWindow();
 
   bool GetHideOnStartup() const;

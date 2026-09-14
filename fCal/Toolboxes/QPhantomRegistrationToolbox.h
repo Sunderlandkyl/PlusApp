@@ -56,7 +56,7 @@ public:
   * \param aParentMainWindow Parent main window
   * \param aFlags widget flag
   */
-  QPhantomRegistrationToolbox(fCalMainWindow* aParentMainWindow, Qt::WindowFlags aFlags = 0);
+  QPhantomRegistrationToolbox(fCalMainWindow* aParentMainWindow, Qt::WindowFlags aFlags = Qt::WindowFlags());
 
   /*! Destructor */
   ~QPhantomRegistrationToolbox();

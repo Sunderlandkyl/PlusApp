@@ -52,7 +52,7 @@ public:
   * \param aParent parent
   * \param aFlags widget flag
   */
-  fCalMainWindow(QWidget* parent = 0, Qt::WindowFlags flags = 0);
+  fCalMainWindow(QWidget* parent = 0, Qt::WindowFlags flags = Qt::WindowFlags());
 
   /*!
   * Destructor

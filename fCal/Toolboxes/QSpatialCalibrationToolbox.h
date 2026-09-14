@@ -36,7 +36,7 @@ public:
   * \param aParentMainWindow Parent main window
   * \param aFlags widget flag
   */
-  QSpatialCalibrationToolbox(fCalMainWindow* aParentMainWindow, Qt::WindowFlags aFlags = 0);
+  QSpatialCalibrationToolbox(fCalMainWindow* aParentMainWindow, Qt::WindowFlags aFlags = Qt::WindowFlags());
 
   /*! Destructor */
   ~QSpatialCalibrationToolbox();
