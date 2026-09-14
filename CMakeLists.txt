@@ -189,11 +189,15 @@ SET(CMAKE_INCLUDE_CURRENT_DIR ON)
 # and it is a separate Qt module that several distributions do not ship, so
 # requiring it only produced configure failures.
 # The Qt major version is the one PlusLib was built with, when PlusLib has
-# widgets; otherwise Qt 6 where it is available and Qt 5 elsewhere, with a
-# Qt5_DIR given on its own taken as the choice of Qt 5.
+# widgets. Otherwise it is the Qt whose directory was given, Qt 6 over Qt 5
+# when both were, and failing that whichever the search finds, Qt 6 first.
+# Qt6_DIR and Qt5_DIR are read explicitly because find_package(QT NAMES ...)
+# consults neither, only QT_DIR and the prefix paths.
 IF(NOT QT_VERSION_MAJOR)
-  IF(Qt5_DIR AND NOT Qt6_DIR)
-    FIND_PACKAGE(QT NAMES Qt5 REQUIRED COMPONENTS Core)
+  IF(Qt6_DIR)
+    SET(QT_VERSION_MAJOR 6)
+  ELSEIF(Qt5_DIR)
+    SET(QT_VERSION_MAJOR 5)
   ELSE()
     FIND_PACKAGE(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Core)
   ENDIF()
