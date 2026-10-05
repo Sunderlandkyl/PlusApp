@@ -679,7 +679,7 @@ void PlusServerLauncherMainWindow::ParseContent(const std::string& message)
 //----------------------------------------------------------------------------
 PlusStatus PlusServerLauncherMainWindow::SendCommand(igtlioCommandPointer command)
 {
-  if (m_RemoteControlServerConnector->IsConnected() && m_RemoteControlServerConnector->SendCommand(command) == 1)
+  if (m_RemoteControlServerConnector && m_RemoteControlServerConnector->IsConnected() && m_RemoteControlServerConnector->SendCommand(command) == 1)
   {
     return PLUS_SUCCESS;
   }
